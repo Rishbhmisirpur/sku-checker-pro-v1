@@ -17,23 +17,30 @@ chat_support()
 file = st.file_uploader("Upload CSV")
 
 
-# ---------------- VERIFY ----------------
+# ---------------- VERIFY FUNCTION ----------------
 def verify(row):
     url = row.get("image_url")
     sku = row.get("product_sku")
     seller = row.get("product_seller")
     price = row.get("product_price")
 
+    # 🔥 GET HTML
     html = get_html(url)
 
+    # ---------------- MATCHING ----------------
     sku_ok = sku_match(html, sku)
     seller_ok = seller_match(html, seller)
 
-    # 🔥 STRICT SELLER BASED PRICE CHECK
-    price_ok = price_match(html, price, seller)
+    # 🔥 IMPORTANT FIX: PRICE ONLY IF SELLER MATCHED
+    if seller_ok:
+        price_ok = price_match(html, price, seller)
+    else:
+        price_ok = False  # ignore price if seller not found
 
+    # ---------------- FINAL RESULT ----------------
     final_result = classify(sku_ok, seller_ok, price_ok)
 
+    # ---------------- SAVE ----------------
     save_result(sku, seller, price, final_result)
 
     return {
