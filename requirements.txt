@@ -6,3 +6,4 @@ webdriver-manager
 plotly
 beautifulsoup4
 openai
+rapidfuzz
