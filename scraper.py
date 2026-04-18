@@ -1,4 +1,3 @@
-# scraper.py
 import requests
 import random
 import time
@@ -6,22 +5,17 @@ import time
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 
-
 session = requests.Session()
 
 
-# ---------------- SELENIUM DRIVER ----------------
 def get_driver():
     options = Options()
     options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-
-    driver = webdriver.Chrome(options=options)
-    return driver
+    return webdriver.Chrome(options=options)
 
 
-# ---------------- MAIN SCRAPER ----------------
 def get_html(url):
     try:
         headers_list = [
@@ -30,7 +24,6 @@ def get_html(url):
             {"User-Agent": "Safari/537"}
         ]
 
-        # -------- FAST MODE (requests) --------
         for _ in range(3):
             headers = random.choice(headers_list)
             r = session.get(url, headers=headers, timeout=20)
@@ -40,7 +33,6 @@ def get_html(url):
 
             time.sleep(1)
 
-        # -------- FALLBACK (Selenium) --------
         driver = get_driver()
         driver.get(url)
 
@@ -51,6 +43,5 @@ def get_html(url):
 
         return html
 
-    except Exception as e:
-        print("SCRAPER ERROR:", e)
+    except:
         return ""
