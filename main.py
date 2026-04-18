@@ -34,7 +34,7 @@ if not st.session_state["logged_in"]:
 
 # ---------------- UI ----------------
 st.set_page_config(page_title="SKU Analyzer AI PRO", layout="wide")
-st.title("🔥 SKU Analyzer AI PRO (STABLE VERSION)")
+st.title("🔥 SKU Analyzer AI PRO (STABLE)")
 
 threads = st.sidebar.slider("Threads", 1, 10, 5)
 use_ai = st.sidebar.toggle("🤖 AI SKU Matching")
@@ -56,16 +56,12 @@ def decode_url(url):
         return url
 
 
-# ---------------- SAFE HTML FETCH ----------------
+# ---------------- HTML FETCH ----------------
 def get_html(url):
     try:
-        headers = {
-            "User-Agent": "Mozilla/5.0"
-        }
+        headers = {"User-Agent": "Mozilla/5.0"}
         r = requests.get(url, headers=headers, timeout=30)
-        if r.status_code == 200:
-            return r.text
-        return ""
+        return r.text if r.status_code == 200 else ""
     except:
         return ""
 
@@ -110,11 +106,9 @@ def seller_match(html, sheet_seller):
         if not s:
             continue
 
-        # direct match
         if sheet in s or s in sheet:
             return True
 
-        # token match
         if len(set(sheet.split()) & set(s.split())) >= 2:
             return True
 
@@ -141,7 +135,7 @@ def verify(row):
         # SKU
         sku_ok = ai_sku_match(html, sku) if use_ai else smart_sku_match(html, sku)
 
-        # SELLER (STABLE LOGIC)
+        # SELLER
         seller_ok = seller_match(html, seller)
 
         # PRICE
@@ -178,7 +172,7 @@ if uploaded_file:
                 results.append(f.result())
                 progress.progress((i + 1) / len(df))
 
-        # UPDATE
+        # UPDATE DF
         for idx, result, sku_ok, seller_ok, price_ok, matched_seller, exact_flag in results:
             df.loc[idx, "result"] = result
             df.loc[idx, "sku_match"] = "Yes" if sku_ok else "No"
@@ -187,13 +181,10 @@ if uploaded_file:
             df.loc[idx, "matched_seller"] = matched_seller
             df.loc[idx, "exact_seller_not_match"] = exact_flag
 
-        st.success("✅ DONE (STABLE VERSION)")
+        st.success("✅ DONE")
 
-        def highlight(row):
-            return ["background-color: #ffcccc"] * len(row) if row["exact_seller_not_match"] == "Yes" else [""]
-
-        st.subheader("📋 Results")
-        st.dataframe(df.style.apply(highlight, axis=1), use_container_width=True)
+        # SAFE TABLE (NO CRASH)
+        st.dataframe(df, use_container_width=True)
 
         show_metrics(df)
         show_chart(df)
