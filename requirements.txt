@@ -7,3 +7,4 @@ plotly
 beautifulsoup4
 openai
 rapidfuzz
+playwright
