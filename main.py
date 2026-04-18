@@ -5,7 +5,7 @@ import re
 import base64
 from urllib.parse import urlparse, parse_qs
 
-from scraper import get_html
+from playwright.sync_api import sync_playwright
 from matcher import smart_sku_match, ai_sku_match, clean_price, price_match_for_seller
 from utils import classify_result
 from ui import show_metrics, show_chart
@@ -34,10 +34,10 @@ if not st.session_state["logged_in"]:
 
 # ---------------- UI ----------------
 st.set_page_config(page_title="SKU Analyzer AI PRO", layout="wide")
-st.title("🔥 SKU Analyzer AI PRO")
+st.title("🔥 SKU Analyzer AI PRO (UPGRADED)")
 
-threads = st.sidebar.slider("Threads", 1, 10, 5)
-use_ai = st.sidebar.toggle("🤖 AI Matching")
+threads = st.sidebar.slider("Threads", 1, 5, 3)
+use_ai = st.sidebar.toggle("🤖 AI SKU Matching")
 
 uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
 
@@ -63,21 +63,40 @@ def normalize(text):
     return text.strip()
 
 
-# ---------------- SELLER EXTRACTION FROM HTML ----------------
-def extract_sellers(html):
+# ---------------- REAL BROWSER SCRAPER ----------------
+def get_page_content(url):
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+
+            page.goto(url, wait_until="networkidle", timeout=60000)
+
+            html = page.content()
+
+            browser.close()
+
+            return html
+    except:
+        return ""
+
+
+# ---------------- SELLER EXTRACTION (BROWSER BASED) ----------------
+def extract_seller(html):
     html = html.lower()
-    sellers = set()
 
     patterns = [
         r"mitzi at ([a-z0-9\s\-&]+)",
         r"sold by[:\s]*([a-z0-9\s\-&]+)",
         r"merchant[:\s]*([a-z0-9\s\-&]+)",
-        r"by ([a-z0-9\s\-&]+)",
+        r"brand[:\s]*([a-z0-9\s\-&]+)",
         r"lighting new york",
         r"wayfair",
         r"lumens",
         r"ferguson"
     ]
+
+    sellers = set()
 
     for p in patterns:
         matches = re.findall(p, html)
@@ -90,17 +109,15 @@ def extract_sellers(html):
 # ---------------- SMART MATCH ----------------
 def seller_match(html, sheet_seller):
     sheet = normalize(sheet_seller)
-    sellers = extract_sellers(html)
+    sellers = extract_seller(html)
 
     for s in sellers:
         if not s:
             continue
 
-        # direct match
         if sheet in s or s in sheet:
             return True
 
-        # token overlap
         if len(set(sheet.split()) & set(s.split())) >= 2:
             return True
 
@@ -119,7 +136,9 @@ def verify(row):
             return row.name, "Error", False, False, False, "", ""
 
         real_url = decode_url(url)
-        html = get_html(real_url)
+
+        # 🔥 REAL BROWSER LOAD
+        html = get_page_content(real_url)
 
         if not html:
             return row.name, "Error", False, False, False, "", ""
@@ -127,7 +146,7 @@ def verify(row):
         # SKU
         sku_ok = ai_sku_match(html, sku) if use_ai else smart_sku_match(html, sku)
 
-        # SELLER (FINAL FIX)
+        # SELLER (REAL FIX)
         seller_ok = seller_match(html, seller)
 
         # PRICE
@@ -136,7 +155,7 @@ def verify(row):
 
         result = classify_result(sku_ok, seller_ok, price_ok)
 
-        matched_seller = "Matched" if seller_ok else "No Match"
+        matched_seller = "MATCHED" if seller_ok else "NO MATCH"
         exact_flag = "No" if seller_ok else "Yes"
 
         return row.name, result, sku_ok, seller_ok, price_ok, matched_seller, exact_flag
@@ -152,7 +171,8 @@ if uploaded_file:
     st.subheader("📊 Preview")
     st.dataframe(df.head())
 
-    if st.button("🚀 Start Check"):
+    if st.button("🚀 Start Check (UPGRADED ENGINE)"):
+
         progress = st.progress(0)
         results = []
 
@@ -163,7 +183,7 @@ if uploaded_file:
                 results.append(f.result())
                 progress.progress((i + 1) / len(df))
 
-        # UPDATE DF
+        # UPDATE
         for idx, result, sku_ok, seller_ok, price_ok, matched_seller, exact_flag in results:
             df.loc[idx, "result"] = result
             df.loc[idx, "sku_match"] = "Yes" if sku_ok else "No"
@@ -172,16 +192,11 @@ if uploaded_file:
             df.loc[idx, "matched_seller"] = matched_seller
             df.loc[idx, "exact_seller_not_match"] = exact_flag
 
-        st.success("✅ Done")
-
-        # FILTER
-        if st.toggle("🚨 Show Only Wrong Seller"):
-            df = df[df["exact_seller_not_match"] == "Yes"]
+        st.success("✅ UPGRADED ENGINE DONE")
 
         def highlight(row):
             return ["background-color: #ffcccc"] * len(row) if row["exact_seller_not_match"] == "Yes" else [""] * len(row)
 
-        st.subheader("📋 Results")
         st.dataframe(df.style.apply(highlight, axis=1), use_container_width=True)
 
         show_metrics(df)
