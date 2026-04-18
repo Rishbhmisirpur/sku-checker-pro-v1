@@ -5,9 +5,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from scraper import get_html
 from matcher import smart_sku_match, smart_seller_match, clean_price, price_match_for_seller
 from utils import classify_result
-from ui import apply_theme 
+from ui import show_metrics, show_chart, apply_theme 
 
-st.set_page_config(page_title="SKU Analyzer PRO", layout="wide") apply_theme()
+st.set_page_config(page_title="SKU Analyzer PRO", layout="wide") 
 st.title("🔥 SKU Analyzer PRO")
 
 uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
