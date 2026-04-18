@@ -1,4 +1,3 @@
-# main.py
 import streamlit as st
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
@@ -10,7 +9,6 @@ from ui import chat_support, show_metrics, show_chart
 
 init_db()
 
-
 st.set_page_config(layout="wide")
 st.title("🚀 FINAL SKU VERIFICATION SYSTEM")
 
@@ -19,6 +17,7 @@ chat_support()
 file = st.file_uploader("Upload CSV")
 
 
+# ---------------- VERIFY ----------------
 def verify(row):
     url = row.get("image_url")
     sku = row.get("product_sku")
@@ -31,18 +30,20 @@ def verify(row):
     seller_ok = seller_match(html, seller)
     price_ok = price_match(html, price)
 
-    result = classify(sku_ok, seller_ok, price_ok)
+    final_result = classify(sku_ok, seller_ok, price_ok)
 
-    save_result(sku, seller, price, result)
+    # DB SAVE
+    save_result(sku, seller, price, final_result)
 
     return {
-        "sku": sku,
-        "seller": seller,
-        "price": price,
-        "result": result
+        "sku_match": "Yes" if sku_ok else "No",
+        "seller_match": "Yes" if seller_ok else "No",
+        "price_match": "Yes" if price_ok else "No",
+        "final_result": final_result
     }
 
 
+# ---------------- RUN ----------------
 if file:
     df = pd.read_csv(file)
 
@@ -62,4 +63,8 @@ if file:
         show_metrics(out)
         show_chart(out)
 
-        st.download_button("Download", out.to_csv(index=False), "result.csv")
+        st.download_button(
+            "Download CSV",
+            out.to_csv(index=False),
+            "result.csv"
+        )
