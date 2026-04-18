@@ -1,18 +1,11 @@
-import streamlit as st
+import re
 
-def chat_support():
-    st.sidebar.title("💬 Support Chat")
-
-    msg = st.sidebar.text_input("Ask issue")
-
-    if st.sidebar.button("Send"):
-        st.sidebar.success("Support: We received your query. We will fix it soon.")
+def normalize(text):
+    return re.sub(r'[^a-zA-Z0-9]', '', str(text)).lower()
 
 
-def show_metrics(df):
-    st.subheader("📊 Summary")
-    st.write(df["result"].value_counts())
-
-
-def show_chart(df):
-    st.bar_chart(df["result"].value_counts())
+def clean_price(text):
+    try:
+        return round(float(re.sub(r'[^0-9.]', '', str(text))), 2)
+    except:
+        return 0.0
