@@ -1,6 +1,10 @@
 import re
 
 
+def normalize(text):
+    return str(text).lower().replace(".com", "").replace("www", "").strip()
+
+
 def sku_match(html, sku):
     if not html or not sku:
         return False
@@ -25,30 +29,46 @@ def seller_match(html, seller):
         return False
 
     html = html.lower()
-    seller = str(seller).lower().replace(".com", "").replace("www", "")
+    seller = normalize(seller)
 
     return seller in html
 
 
-# ✅ FIXED: PRICE CHECK ONLY FOR SAME SELLER CONTEXT
-def price_match(html, price):
+# 🔥 extract ONLY seller-specific block
+def extract_seller_block(html, seller):
+    html = html.lower()
+    seller = normalize(seller)
+
+    if seller in html:
+        parts = html.split(seller)
+        if len(parts) > 1:
+            return parts[1]  # after seller section
+
+    return ""
+
+
+# 🔥 STRICT PRICE MATCH (ONLY INSIDE SELLER BLOCK)
+def price_match(html, price, seller):
     try:
-        if not html or not price:
+        if not html or not price or not seller:
             return False
 
-        scraped_prices = re.findall(r"\d+", html)
+        block = extract_seller_block(html, seller)
 
-        if not scraped_prices:
+        if not block:
             return False
 
-        return str(int(float(price))) in scraped_prices
+        price = str(int(float(price)))
+
+        # ONLY check inside seller block
+        return price in block
 
     except:
         return False
 
 
-# ✅ FINAL LOGIC (STRICT)
+# 🔥 FINAL DECISION ENGINE
 def classify(sku_ok, seller_ok, price_ok):
-    if sku_ok and seller_ok:
+    if sku_ok and seller_ok and price_ok:
         return "YES"
     return "NO"
