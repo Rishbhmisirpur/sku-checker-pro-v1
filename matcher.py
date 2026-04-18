@@ -1,52 +1,36 @@
 import re
-
-
-def normalize(text):
-    return str(text).lower().replace(".com", "").replace("www", "").strip()
+from scraper import get_driver_page, find_seller_block
 
 
 def sku_match(html, sku):
     if not html or not sku:
         return False
-
     return str(sku).lower() in html.lower()
 
 
 def seller_match(html, seller):
     if not html or not seller:
         return False
-
-    return normalize(seller) in html.lower()
-
-
-# 🔥 SMART PRICE EXTRACT (NO BLOCK DEPENDENCY)
-def extract_all_prices(html):
-    # captures: 586, 586.00, $586, ₹586
-    return re.findall(r"\d+(?:\.\d+)?", html)
+    return str(seller).lower() in html.lower()
 
 
-# 🔥 SELLER + PRICE SMART CHECK
-def price_match(html, sheet_price, seller):
+# 🔥 REAL FIXED PRICE MATCH
+def price_match(url, sheet_price, seller):
     try:
-        if not html or not sheet_price:
+        driver = get_driver_page(url)
+
+        block = find_seller_block(driver, seller)
+
+        if not block:
+            driver.quit()
             return False
 
-        html_low = html.lower()
-        seller = normalize(seller)
+        text = block.text.lower()
 
-        # 🔥 STEP 1: ensure seller exists
-        if seller not in html_low:
-            return False
+        driver.quit()
 
-        # 🔥 STEP 2: extract all prices near seller
-        split = html_low.split(seller)
-
-        if len(split) < 2:
-            return False
-
-        near_text = split[1][:5000]  # expanded window
-
-        prices = extract_all_prices(near_text)
+        # extract all numbers (prices)
+        prices = re.findall(r"\d+(?:\.\d+)?", text)
 
         if not prices:
             return False
