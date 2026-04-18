@@ -37,11 +37,10 @@ use_ai = st.sidebar.toggle("🤖 AI Matching")
 uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
 
 # 🔍 SELLER EXTRACT
-def extract_seller_name(html):
+def extract_seller_name(html, expected_seller):
     try:
-        match = re.search(r"Sold by[:\s]*([A-Za-z0-9\s\-]+)", html, re.IGNORECASE)
-        if match:
-            return match.group(1).strip()
+        if expected_seller.lower() in html.lower():
+            return expected_seller
         return ""
     except:
         return ""
