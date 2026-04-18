@@ -26,15 +26,15 @@ def verify(row):
 
     html = get_html(url)
 
-    # safety check (IMPORTANT FIX)
-    if not html:
+    # 🔥 DEBUG STEP (IMPORTANT)
+    if not html or len(html) < 500:
         return {
             "sku": sku,
             "seller": seller,
             "price": price,
-            "sku_match": "No",
-            "seller_match": "No",
-            "price_match": "No",
+            "sku_match": "No (HTML Empty)",
+            "seller_match": "No (HTML Empty)",
+            "price_match": "No (HTML Empty)",
             "final_result": "NO"
         }
 
@@ -42,7 +42,7 @@ def verify(row):
     sku_ok = sku_match(html, sku)
     seller_ok = seller_match(html, seller)
 
-    # 🔥 PRICE ONLY IF SELLER EXISTS SOMEWHERE
+    # 🔥 ONLY CHECK PRICE IF SELLER FOUND
     price_ok = False
     if seller_ok:
         price_ok = price_match(html, price, seller)
