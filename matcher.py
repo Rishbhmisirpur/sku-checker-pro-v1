@@ -17,11 +17,11 @@ def seller_match(html, seller):
     if not html or not seller:
         return False
 
-    html_low = html.lower()
-    seller = normalize(seller)
+    html = html.lower()
+    seller = str(seller).lower()
 
-    # loose + safe match (IMPORTANT FIX)
-    return seller.split(".")[0] in html_low
+    # 🔥 super loose match (fix for real websites)
+    return any(word in html for word in seller.split() if len(word) > 3)
 
 
 # ---------------- PRICE (FINAL FIXED LOGIC) ----------------
