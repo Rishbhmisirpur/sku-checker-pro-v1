@@ -1,12 +1,10 @@
+# scraper.py
 import requests
 import random
 import time
 
-# Selenium fallback imports
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
 
 
 session = requests.Session()
@@ -18,17 +16,12 @@ def get_driver():
     options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-blink-features=AutomationControlled")
 
-    driver = webdriver.Chrome(
-        service=Service(ChromeDriverManager().install()),
-        options=options
-    )
-
+    driver = webdriver.Chrome(options=options)
     return driver
 
 
-# ---------------- MAIN SCRAPER (HYBRID) ----------------
+# ---------------- MAIN SCRAPER ----------------
 def get_html(url):
     try:
         headers_list = [
@@ -37,41 +30,27 @@ def get_html(url):
             {"User-Agent": "Safari/537"}
         ]
 
-        # ---------------- 1. FAST MODE (requests) ----------------
+        # -------- FAST MODE (requests) --------
         for _ in range(3):
             headers = random.choice(headers_list)
-
             r = session.get(url, headers=headers, timeout=20)
 
-            html = r.text or ""
-
-            # valid HTML check
-            if r.status_code == 200 and len(html) > 300:
-                return html
+            if r.status_code == 200 and len(r.text) > 300:
+                return r.text
 
             time.sleep(1)
 
-        # ---------------- 2. FALLBACK MODE (SELENIUM) ----------------
-        driver = None
-        try:
-            driver = get_driver()
-            driver.get(url)
+        # -------- FALLBACK (Selenium) --------
+        driver = get_driver()
+        driver.get(url)
 
-            time.sleep(3)  # JS render wait
+        time.sleep(5)
 
-            html = driver.page_source
+        html = driver.page_source
+        driver.quit()
 
-            if html and len(html) > 300:
-                return html
+        return html
 
-            return ""
-
-        except:
-            return ""
-
-        finally:
-            if driver:
-                driver.quit()
-
-    except:
+    except Exception as e:
+        print("SCRAPER ERROR:", e)
         return ""
