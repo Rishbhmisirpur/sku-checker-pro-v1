@@ -5,7 +5,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from scraper import get_html
 from matcher import smart_sku_match, smart_seller_match, clean_price, price_match_for_seller
 from utils import classify_result
-from ui import show_metrics, show_chart
+from ui import apply_theme
+apply_theme()
 
 st.set_page_config(page_title="SKU Analyzer PRO", layout="wide")
 st.title("🔥 SKU Analyzer PRO")
