@@ -3,10 +3,3 @@ pandas
 requests
 selenium
 webdriver-manager
-plotly
-beautifulsoup4
-openai
-rapidfuzz
-playwright
-beautifulsoup4
-lxml
