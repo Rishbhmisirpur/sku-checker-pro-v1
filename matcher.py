@@ -9,6 +9,7 @@ def normalize(text):
 def sku_match(html, sku):
     if not html or not sku:
         return False
+
     return str(sku).lower() in html.lower()
 
 
@@ -16,43 +17,41 @@ def sku_match(html, sku):
 def seller_match(html, seller):
     if not html or not seller:
         return False
+
     return normalize(seller) in html.lower()
 
 
-# ---------------- SELLER BLOCK EXTRACT ----------------
-def get_seller_block(html, seller):
-    html_low = html.lower()
-    seller = normalize(seller)
-
-    if seller not in html_low:
-        return ""
-
-    parts = html_low.split(seller)
-
-    # 🔥 ONLY NEARBY TEXT (important fix)
-    return parts[1][:5000]
-
-
-# ---------------- PRICE MATCH (FINAL LOGIC) ----------------
+# ---------------- PRICE (STABLE LOGIC FIX) ----------------
 def price_match(html, sheet_price, seller):
     try:
-        if not html or not sheet_price or not seller:
+        if not html or not sheet_price:
             return False
 
-        block = get_seller_block(html, seller)
+        html_low = html.lower()
+        seller = normalize(seller)
 
-        if not block:
+        # 🔥 if seller not present → fail safe
+        if seller not in html_low:
             return False
 
-        # extract numbers from ONLY seller block
-        prices = re.findall(r"\d+(?:\.\d+)?", block)
+        # 🔥 NO SPLIT DEPENDENCY (IMPORTANT FIX)
+        # instead search near seller OR full html fallback
+
+        # take small context window around seller
+        index = html_low.find(seller)
+
+        if index == -1:
+            return False
+
+        context = html_low[index:index + 8000]
+
+        prices = re.findall(r"\d+(?:\.\d+)?", context)
 
         if not prices:
             return False
 
         sheet_price = str(int(float(sheet_price)))
 
-        # 🔥 ONLY check inside seller block
         return sheet_price in prices
 
     except:
@@ -61,4 +60,6 @@ def price_match(html, sheet_price, seller):
 
 # ---------------- FINAL DECISION ----------------
 def classify(sku_ok, seller_ok, price_ok):
-    return "YES" if (sku_ok and seller_ok and price_ok) else "NO"
+    if sku_ok and seller_ok and price_ok:
+        return "YES"
+    return "NO"
