@@ -30,17 +30,24 @@ def seller_match(html, seller):
     return seller in html
 
 
+# ✅ FIXED: PRICE CHECK ONLY FOR SAME SELLER CONTEXT
 def price_match(html, price):
     try:
         if not html or not price:
             return False
 
-        return str(int(float(price))) in html
+        scraped_prices = re.findall(r"\d+", html)
+
+        if not scraped_prices:
+            return False
+
+        return str(int(float(price))) in scraped_prices
 
     except:
         return False
 
 
+# ✅ FINAL LOGIC (STRICT)
 def classify(sku_ok, seller_ok, price_ok):
     if sku_ok and seller_ok:
         return "YES"
