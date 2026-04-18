@@ -1,3 +1,8 @@
+import os
+from openai import OpenAI
+
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
 def smart_sku_match(html, sku):
     return str(sku).lower() in html.lower()
 
@@ -13,10 +18,19 @@ def clean_price(price):
 def price_match_for_seller(html, seller, price):
     return str(price) in html
 
-# 🔥 AI MATCH (simple safe version)
+# 🔥 REAL AI
 def ai_sku_match(html, sku):
     try:
-        # simple smart check (AI jaisa behavior without API)
-        return str(sku).lower() in html.lower()
+        prompt = f"Check if SKU '{sku}' exists in this content. Answer only YES or NO.\n\n{html[:1200]}"
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0
+        )
+
+        ans = response.choices[0].message.content.strip().lower()
+        return "yes" in ans
+
     except:
-        return False
+        return str(sku).lower() in html.lower()
