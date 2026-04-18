@@ -2,14 +2,14 @@ import re
 
 
 def normalize(t):
-    return str(t).lower().replace(".com", "").replace("www", "").strip()
+    return str(t).lower()
 
 
 # ---------------- SKU ----------------
 def sku_match(html, sku):
     if not html or not sku:
         return False
-    return str(sku).lower() in html.lower()
+    return sku.lower() in html.lower()
 
 
 # ---------------- SELLER ----------------
@@ -17,10 +17,7 @@ def seller_match(html, seller):
     if not html or not seller:
         return False
 
-    html = html.lower()
-    seller = normalize(seller)
-
-    return seller.split(".")[0] in html
+    return seller.lower().split(".")[0] in html.lower()
 
 
 # ---------------- PRICE ----------------
@@ -29,19 +26,16 @@ def price_match(html, price, seller):
         if not html or not price:
             return False
 
-        html_low = html.lower()
-        seller = normalize(seller)
-
         # seller must exist
-        if seller.split(".")[0] not in html_low:
+        if seller.lower().split(".")[0] not in html.lower():
             return False
 
-        # extract all numbers
-        prices = re.findall(r"\d+(?:\.\d+)?", html_low)
+        price = str(int(float(price)))
 
-        sheet_price = str(int(float(price)))
+        # simple global scan (stable)
+        all_prices = re.findall(r"\d+", html)
 
-        return sheet_price in prices
+        return price in all_prices
 
     except:
         return False
@@ -49,4 +43,6 @@ def price_match(html, price, seller):
 
 # ---------------- FINAL ----------------
 def classify(sku_ok, seller_ok, price_ok):
-    return "YES" if (sku_ok and seller_ok and price_ok) else "NO"
+    if sku_ok and seller_ok and price_ok:
+        return "YES"
+    return "NO"
