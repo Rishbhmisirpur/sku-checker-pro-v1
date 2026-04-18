@@ -49,34 +49,46 @@ def extract_seller_name(html):
 # ---------------- VERIFY ----------------
 def verify(row):
     try:
-        url = str(row.get("url", "")).strip()
-        sku = str(row.get("sku", "")).strip()
-        seller = str(row.get("seller", "")).strip()
-        price_raw = row.get("price", "")
+        # 🔥 NEW COLUMN NAMES USE
+        url = str(row.get("image_url", "")).strip()
+        sku = str(row.get("product_sku", "")).strip()
+        seller = str(row.get("product_seller", "")).strip()
+        price_raw = row.get("product_price", "")
+
+        if not url:
+            return row.name, "Error: URL Missing", False, False, False, "", ""
 
         html = get_html(url)
 
-        if not html:
-            return row.name, "Error", False, False, False, "", ""
+        if not html or len(html) < 50:
+            return row.name, "Error: Page Not Loaded", False, False, False, "", ""
 
+        # 🔥 SKU MATCH
         if use_ai:
             sku_ok = ai_sku_match(html, sku)
         else:
             sku_ok = smart_sku_match(html, sku)
 
+        # 🔥 SELLER MATCH
         seller_ok = smart_seller_match(html, seller)
+
+        # 🔥 PRICE MATCH
         price = clean_price(price_raw)
         price_ok = price_match_for_seller(html, seller, price)
 
-        image = extract_image(html)
-        found_seller = extract_seller_name(html)
+        # 🔥 IMAGE
+        image = extract_image(html) or ""
 
+        # 🔥 SELLER FOUND
+        found_seller = extract_seller_name(html) or ""
+
+        # 🔥 RESULT
         result = classify_result(sku_ok, seller_ok, price_ok)
 
         return row.name, result, sku_ok, seller_ok, price_ok, image, found_seller
 
-    except:
-        return row.name, "Error", False, False, False, "", ""
+    except Exception as e:
+        return row.name, f"Error: {str(e)}", False, False, False, "", ""
 
 # ---------------- MAIN ----------------
 if uploaded_file:
