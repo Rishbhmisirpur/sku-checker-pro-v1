@@ -1,53 +1,29 @@
-import re
+import time
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 
 
-def normalize(text):
-    return str(text).lower().replace(".com", "").replace("www", "").strip()
+def get_driver():
+    options = Options()
+    options.add_argument("--headless=new")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--user-agent=Mozilla/5.0")
+
+    return webdriver.Chrome(options=options)
 
 
-# ---------------- SKU ----------------
-def sku_match(html, sku):
-    if not html or not sku:
-        return False
-    return str(sku).lower() in html.lower()
-
-
-# ---------------- SELLER ----------------
-def seller_match(html, seller):
-    if not html or not seller:
-        return False
-
-    html = html.lower()
-    seller = str(seller).lower()
-
-    # 🔥 super loose match (fix for real websites)
-    return any(word in html for word in seller.split() if len(word) > 3)
-
-
-# ---------------- PRICE (FINAL FIXED LOGIC) ----------------
-def price_match(html, sheet_price, seller):
+def get_html(url):
     try:
-        if not html or not sheet_price or not seller:
-            return False
+        driver = get_driver()
+        driver.get(url)
 
-        html_low = html.lower()
-        seller = normalize(seller)
+        time.sleep(8)  # important wait for JS load
 
-        # seller must exist somewhere
-        if seller.split(".")[0] not in html_low:
-            return False
+        html = driver.page_source
+        driver.quit()
 
-        sheet_price = str(int(float(sheet_price)))
-
-        # 🔥 SIMPLE GLOBAL PRICE CHECK (STABLE)
-        prices = re.findall(r"\d+(?:\.\d+)?", html_low)
-
-        return sheet_price in prices
+        return html if html and len(html) > 1000 else ""
 
     except:
-        return False
-
-
-# ---------------- FINAL DECISION ----------------
-def classify(sku_ok, seller_ok, price_ok):
-    return "YES" if (sku_ok and seller_ok and price_ok) else "NO"
+        return ""
