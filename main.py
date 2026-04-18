@@ -29,7 +29,7 @@ def verify(row):
     sku_ok = sku_match(html, sku)
     seller_ok = seller_match(html, seller)
 
-    # ✅ STRICT SELLER-BASED PRICE CHECK
+    # 🔥 STRICT SELLER BASED PRICE CHECK
     price_ok = price_match(html, price, seller)
 
     final_result = classify(sku_ok, seller_ok, price_ok)
