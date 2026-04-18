@@ -10,7 +10,7 @@ from ui import chat_support, show_metrics, show_chart
 init_db()
 
 st.set_page_config(layout="wide")
-st.title("🚀 FINAL SKU SYSTEM")
+st.title("🚀 SKU SYSTEM")
 
 chat_support()
 
@@ -18,14 +18,13 @@ file = st.file_uploader("Upload CSV")
 
 
 def verify(row):
-    url = row.get("image_url")
-    sku = row.get("product_sku")
-    seller = row.get("product_seller")
-    price = row.get("product_price")
+    url = row["image_url"]
+    sku = row["product_sku"]
+    seller = row["product_seller"]
+    price = row["product_price"]
 
     html = get_html(url)
 
-    # 🔥 IF HTML EMPTY → DIRECT FAIL
     if not html:
         return {
             "sku": sku,
@@ -39,12 +38,11 @@ def verify(row):
 
     sku_ok = sku_match(html, sku)
     seller_ok = seller_match(html, seller)
+    price_ok = price_match(html, price, seller)
 
-    price_ok = price_match(html, price, seller) if seller_ok else False
+    result = classify(sku_ok, seller_ok, price_ok)
 
-    final_result = classify(sku_ok, seller_ok, price_ok)
-
-    save_result(sku, seller, price, final_result)
+    save_result(sku, seller, price, result)
 
     return {
         "sku": sku,
@@ -53,7 +51,7 @@ def verify(row):
         "sku_match": "Yes" if sku_ok else "No",
         "seller_match": "Yes" if seller_ok else "No",
         "price_match": "Yes" if price_ok else "No",
-        "final_result": final_result
+        "final_result": result
     }
 
 
@@ -72,9 +70,6 @@ if file:
         out = pd.DataFrame(results)
 
         st.dataframe(out)
-
-        show_metrics(out)
-        show_chart(out)
 
         st.download_button(
             "Download CSV",
