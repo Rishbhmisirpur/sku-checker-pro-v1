@@ -36,10 +36,9 @@ use_ai = st.sidebar.toggle("🤖 AI Matching")
 
 uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
 
-# 🔍 SELLER EXTRACT (simple logic)
+# 🔍 SELLER EXTRACT
 def extract_seller_name(html):
     try:
-        # simple pattern (Amazon style)
         match = re.search(r"Sold by[:\s]*([A-Za-z0-9\s\-]+)", html, re.IGNORECASE)
         if match:
             return match.group(1).strip()
@@ -107,7 +106,7 @@ if uploaded_file:
             df.loc[idx, "image"] = image
             df.loc[idx, "matched_seller"] = found_seller
 
-            # 🔥 EXACT SELLER CHECK
+            # 🔥 exact seller check
             if sku_ok and not seller_ok:
                 df.loc[idx, "exact_seller_not_match"] = "Yes"
             else:
@@ -115,7 +114,7 @@ if uploaded_file:
 
         st.success("✅ Done")
 
-        # 🔥 COLUMN RENAME
+        # 🔥 rename columns
         df.rename(columns={
             "sku": "product_sku",
             "url": "image_url",
@@ -123,13 +122,13 @@ if uploaded_file:
             "price": "product_price"
         }, inplace=True)
 
-        # 🔥 AUTO FILTER (wrong seller only)
+        # 🚨 filter toggle
         show_wrong = st.toggle("🚨 Show Only Wrong Seller")
 
         if show_wrong:
             df = df[df["exact_seller_not_match"] == "Yes"]
 
-        # 🔥 HIGHLIGHT FUNCTION
+        # 🎨 highlight
         def highlight_rows(row):
             if row["exact_seller_not_match"] == "Yes":
                 return ["background-color: #ffcccc"] * len(row)
@@ -141,10 +140,17 @@ if uploaded_file:
         show_metrics(df)
         show_chart(df)
 
-        # 🖼️ IMAGE PREVIEW
-        if "image" in df.columns:
+        # 🖼️ SAFE IMAGE PREVIEW (NO ERROR)
+        valid_images = []
+        for img in df["image"].dropna():
+            if isinstance(img, str) and img.startswith("http"):
+                valid_images.append(img)
+
+        if valid_images:
             st.subheader("🖼️ Image Preview")
-            st.image(df["image"].dropna().head(5).tolist(), width=120)
+            st.image(valid_images[:5], width=120)
+        else:
+            st.info("No valid images found")
 
         st.download_button(
             "📥 Download CSV",
