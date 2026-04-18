@@ -1,9 +1,8 @@
 import streamlit as st
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import re
 
-from scraper import get_html, extract_image
+from scraper import get_html
 from matcher import smart_sku_match, smart_seller_match, clean_price, price_match_for_seller, ai_sku_match
 from utils import classify_result
 from ui import show_metrics, show_chart
@@ -36,7 +35,7 @@ use_ai = st.sidebar.toggle("🤖 AI Matching")
 
 uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
 
-# 🔍 SELLER EXTRACT
+# ---------------- SELLER LOGIC ----------------
 def extract_seller_name(html, expected_seller):
     try:
         if expected_seller.lower() in html.lower():
@@ -48,46 +47,41 @@ def extract_seller_name(html, expected_seller):
 # ---------------- VERIFY ----------------
 def verify(row):
     try:
-        # 🔥 NEW COLUMN NAMES USE
         url = str(row.get("image_url", "")).strip()
         sku = str(row.get("product_sku", "")).strip()
         seller = str(row.get("product_seller", "")).strip()
         price_raw = row.get("product_price", "")
 
         if not url:
-            return row.name, "Error: URL Missing", False, False, False, "", ""
+            return row.name, "Error: URL Missing", False, False, False, ""
 
         html = get_html(url)
 
-        if not html or len(html) < 50:
-            return row.name, "Error: Page Not Loaded", False, False, False, "", ""
+        if not html:
+            return row.name, "Error: Page Not Loaded", False, False, False, ""
 
-        # 🔥 SKU MATCH
+        # SKU
         if use_ai:
             sku_ok = ai_sku_match(html, sku)
         else:
             sku_ok = smart_sku_match(html, sku)
 
-        # 🔥 SELLER MATCH
+        # Seller
         seller_ok = smart_seller_match(html, seller)
 
-        # 🔥 PRICE MATCH
+        # Price
         price = clean_price(price_raw)
         price_ok = price_match_for_seller(html, seller, price)
 
-        # 🔥 IMAGE
-        image = extract_image(html) or ""
+        # Seller found
+        found_seller = extract_seller_name(html, seller)
 
-        # 🔥 SELLER FOUND
-        found_seller = extract_seller_name(html, seller) or ""
-
-        # 🔥 RESULT
         result = classify_result(sku_ok, seller_ok, price_ok)
 
-        return row.name, result, sku_ok, seller_ok, price_ok, image, found_seller
+        return row.name, result, sku_ok, seller_ok, price_ok, found_seller
 
     except Exception as e:
-        return row.name, f"Error: {str(e)}", False, False, False, "", ""
+        return row.name, f"Error: {str(e)}", False, False, False, ""
 
 # ---------------- MAIN ----------------
 if uploaded_file:
@@ -104,45 +98,35 @@ if uploaded_file:
             futures = [executor.submit(verify, row) for _, row in df.iterrows()]
 
             for i, future in enumerate(as_completed(futures)):
-                idx, result, sku_ok, seller_ok, price_ok, image, found_seller = future.result()
-
-                results.append((idx, result, sku_ok, seller_ok, price_ok, image, found_seller))
+                idx, result, sku_ok, seller_ok, price_ok, found_seller = future.result()
+                results.append((idx, result, sku_ok, seller_ok, price_ok, found_seller))
                 progress.progress((i + 1) / len(df))
 
-     for ...
-    df.loc[...] ✅, result, sku_ok, seller_ok, price_ok, image, found_seller in results:
-    df.loc[idx, "result"] = result
-    df.loc[idx, "sku_match"] = "Yes" if sku_ok else "No"
-    df.loc[idx, "seller_match"] = "Yes" if seller_ok else "No"
-    df.loc[idx, "price_match"] = "Yes" if price_ok else "No"
-    df.loc[idx, "matched_seller"] = found_seller
+        # ✅ RESULT UPDATE (FIXED INDENT)
+        for idx, result, sku_ok, seller_ok, price_ok, found_seller in results:
+            df.loc[idx, "result"] = result
+            df.loc[idx, "sku_match"] = "Yes" if sku_ok else "No"
+            df.loc[idx, "seller_match"] = "Yes" if seller_ok else "No"
+            df.loc[idx, "price_match"] = "Yes" if price_ok else "No"
+            df.loc[idx, "matched_seller"] = found_seller
 
-    # 🔥 exact seller check
-    if sku_ok:
-        if str(found_seller).strip().lower() == str(df.loc[idx, "product_seller"]).strip().lower():
-            df.loc[idx, "exact_seller_not_match"] = "No"
-        else:
-            df.loc[idx, "exact_seller_not_match"] = "Yes"
-    else:
-        df.loc[idx, "exact_seller_not_match"] = "No"
+            # 🔥 exact seller check
+            if sku_ok:
+                if str(found_seller).strip().lower() == str(df.loc[idx, "product_seller"]).strip().lower():
+                    df.loc[idx, "exact_seller_not_match"] = "No"
+                else:
+                    df.loc[idx, "exact_seller_not_match"] = "Yes"
+            else:
+                df.loc[idx, "exact_seller_not_match"] = "No"
 
-st.success("✅ Done")
+        st.success("✅ Done")
 
-        # 🔥 rename columns
-        df.rename(columns={
-            "sku": "product_sku",
-            "url": "image_url",
-            "seller": "product_seller",
-            "price": "product_price"
-        }, inplace=True)
-
-        # 🚨 filter toggle
+        # 🚨 Filter
         show_wrong = st.toggle("🚨 Show Only Wrong Seller")
-
         if show_wrong:
             df = df[df["exact_seller_not_match"] == "Yes"]
 
-        # 🎨 highlight
+        # 🎨 Highlight
         def highlight_rows(row):
             if row["exact_seller_not_match"] == "Yes":
                 return ["background-color: #ffcccc"] * len(row)
