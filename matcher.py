@@ -1,49 +1,64 @@
 import re
-from scraper import get_driver_page, find_seller_block
 
 
+def normalize(text):
+    return str(text).lower().replace(".com", "").replace("www", "").strip()
+
+
+# ---------------- SKU ----------------
 def sku_match(html, sku):
     if not html or not sku:
         return False
     return str(sku).lower() in html.lower()
 
 
+# ---------------- SELLER ----------------
 def seller_match(html, seller):
     if not html or not seller:
         return False
-    return str(seller).lower() in html.lower()
+    return normalize(seller) in html.lower()
 
 
-# 🔥 REAL FIXED PRICE MATCH
-def price_match(url, sheet_price, seller):
+# ---------------- SELLER BLOCK EXTRACT ----------------
+def get_seller_block(html, seller):
+    html_low = html.lower()
+    seller = normalize(seller)
+
+    if seller not in html_low:
+        return ""
+
+    parts = html_low.split(seller)
+
+    # 🔥 ONLY NEARBY TEXT (important fix)
+    return parts[1][:5000]
+
+
+# ---------------- PRICE MATCH (FINAL LOGIC) ----------------
+def price_match(html, sheet_price, seller):
     try:
-        driver = get_driver_page(url)
-
-        block = find_seller_block(driver, seller)
-
-        if not block:
-            driver.quit()
+        if not html or not sheet_price or not seller:
             return False
 
-        text = block.text.lower()
+        block = get_seller_block(html, seller)
 
-        driver.quit()
+        if not block:
+            return False
 
-        # extract all numbers (prices)
-        prices = re.findall(r"\d+(?:\.\d+)?", text)
+        # extract numbers from ONLY seller block
+        prices = re.findall(r"\d+(?:\.\d+)?", block)
 
         if not prices:
             return False
 
         sheet_price = str(int(float(sheet_price)))
 
+        # 🔥 ONLY check inside seller block
         return sheet_price in prices
 
     except:
         return False
 
 
+# ---------------- FINAL DECISION ----------------
 def classify(sku_ok, seller_ok, price_ok):
-    if sku_ok and seller_ok and price_ok:
-        return "YES"
-    return "NO"
+    return "YES" if (sku_ok and seller_ok and price_ok) else "NO"
