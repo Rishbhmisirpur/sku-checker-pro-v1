@@ -32,10 +32,12 @@ def verify(row):
 
     final_result = classify(sku_ok, seller_ok, price_ok)
 
-    # DB SAVE
     save_result(sku, seller, price, final_result)
 
     return {
+        "sku": sku,
+        "seller": seller,
+        "price": price,
         "sku_match": "Yes" if sku_ok else "No",
         "seller_match": "Yes" if seller_ok else "No",
         "price_match": "Yes" if price_ok else "No",
