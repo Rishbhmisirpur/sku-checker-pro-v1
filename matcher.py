@@ -1,4 +1,3 @@
-# matcher.py
 import re
 
 
@@ -8,7 +7,7 @@ def sku_match(html, sku):
         return False
 
     html = html.lower()
-    sku = str(sku).lower()
+    sku = str(sku).lower().strip()
 
     if sku in html:
         return True
@@ -22,15 +21,18 @@ def sku_match(html, sku):
     return False
 
 
-# ---------------- SELLER MATCH ----------------
+# ---------------- SELLER MATCH (IMPROVED) ----------------
 def seller_match(html, seller):
     if not html or not seller:
         return False
 
     html = html.lower()
-    seller = str(seller).lower().replace(".com", "")
 
-    return seller in html
+    seller = str(seller).lower().replace(".com", "").replace("www", "").strip()
+
+    # strong partial match
+    seller_tokens = seller.split()
+    return any(token in html for token in seller_tokens)
 
 
 # ---------------- PRICE MATCH ----------------
@@ -39,17 +41,16 @@ def price_match(html, price):
         if not html or not price:
             return False
 
-        return str(int(float(price))) in html
+        price = str(int(float(price)))
+        return price in html
 
     except:
         return False
 
 
-# ---------------- CLASSIFY ----------------
+# ---------------- FINAL LOGIC (IMPORTANT FIX) ----------------
 def classify(sku_ok, seller_ok, price_ok):
-    if sku_ok and seller_ok and price_ok:
-        return "MATCH"
-    elif sku_ok:
-        return "PARTIAL"
-    else:
-        return "NO MATCH"
+    # ✔ MAIN RULE
+    if sku_ok and seller_ok:
+        return "YES"
+    return "NO"
