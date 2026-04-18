@@ -1,78 +1,48 @@
 import streamlit as st
 import pandas as pd
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from scraper import get_html
-from matcher import sku_match, seller_match, price_match, classify
+from scraper import fetch_html
+from matcher import verify_row
+from ui import render_row, render_result
 from db import init_db, save_result
-from ui import chat_support, show_metrics, show_chart
+
+st.set_page_config(page_title="SKU Checker PRO MAX", layout="wide")
+st.title("🔥 SKU + Seller + Price Analyzer")
 
 init_db()
 
-st.set_page_config(layout="wide")
-st.title("🚀 SKU SYSTEM")
-
-chat_support()
-
-file = st.file_uploader("Upload CSV")
-
-
-def verify(row):
-    url = row["image_url"]
-    sku = row["product_sku"]
-    seller = row["product_seller"]
-    price = row["product_price"]
-
-    html = get_html(url)
-
-    if not html:
-        return {
-            "sku": sku,
-            "seller": seller,
-            "price": price,
-            "sku_match": "No",
-            "seller_match": "No",
-            "price_match": "No",
-            "final_result": "NO"
-        }
-
-    sku_ok = sku_match(html, sku)
-    seller_ok = seller_match(html, seller)
-    price_ok = price_match(html, price, seller)
-
-    result = classify(sku_ok, seller_ok, price_ok)
-
-    save_result(sku, seller, price, result)
-
-    return {
-        "sku": sku,
-        "seller": seller,
-        "price": price,
-        "sku_match": "Yes" if sku_ok else "No",
-        "seller_match": "Yes" if seller_ok else "No",
-        "price_match": "Yes" if price_ok else "No",
-        "final_result": result
-    }
-
+file = st.file_uploader("Upload CSV", type=["csv"])
 
 if file:
     df = pd.read_csv(file)
 
-    if st.button("RUN"):
+    if st.button("🚀 Start Check"):
+
+        progress = st.progress(0)
+        placeholder = st.empty()
+        done = 0
+
         results = []
 
-        with ThreadPoolExecutor(max_workers=5) as ex:
-            futures = [ex.submit(verify, r) for _, r in df.iterrows()]
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            futures = [executor.submit(verify_row, row) for _, row in df.iterrows()]
 
-            for f in futures:
-                results.append(f.result())
+            for f in as_completed(futures):
+                res = f.result()
+                results.append(res)
 
-        out = pd.DataFrame(results)
+                idx = res["index"]
+                df.loc[idx, "result"] = res["result"]
+                df.loc[idx, "sku_match"] = res["sku"]
+                df.loc[idx, "seller_match"] = res["seller"]
+                df.loc[idx, "price_match"] = res["price"]
 
-        st.dataframe(out)
+                save_result(res)
 
-        st.download_button(
-            "Download CSV",
-            out.to_csv(index=False),
-            "result.csv"
-        )
+                done += 1
+                progress.progress(done / len(df))
+
+                render_row(df)
+
+        render_result(df)
