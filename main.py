@@ -109,16 +109,16 @@ if uploaded_file:
                 results.append((idx, result, sku_ok, seller_ok, price_ok, image, found_seller))
                 progress.progress((i + 1) / len(df))
 
-        for idx, result, sku_ok, seller_ok, price_ok, image, found_seller in results:
+     for idx, result, sku_ok, seller_ok, price_ok, image, found_seller in results:
     df.loc[idx, "result"] = result
     df.loc[idx, "sku_match"] = "Yes" if sku_ok else "No"
     df.loc[idx, "seller_match"] = "Yes" if seller_ok else "No"
     df.loc[idx, "price_match"] = "Yes" if price_ok else "No"
     df.loc[idx, "matched_seller"] = found_seller
 
-    # 🔥 exact seller check (FIXED)
+    # 🔥 exact seller check
     if sku_ok:
-        if str(row.get("product_seller", "")).strip().lower() == str(found_seller).strip().lower():
+        if str(found_seller).strip().lower() == str(df.loc[idx, "product_seller"]).strip().lower():
             df.loc[idx, "exact_seller_not_match"] = "No"
         else:
             df.loc[idx, "exact_seller_not_match"] = "Yes"
