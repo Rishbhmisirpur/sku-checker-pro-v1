@@ -5,15 +5,10 @@ import re
 import base64
 import requests
 import random
-import time
+import math
 from urllib.parse import urlparse, parse_qs
 
-from matcher import smart_sku_match, ai_sku_match, clean_price, price_match_for_seller
-from utils import classify_result
-
-
-# ---------------- SESSION (IMPORTANT) ----------------
-session = requests.Session()
+from matcher import classify_result
 
 
 # ---------------- LOGIN ----------------
@@ -38,13 +33,16 @@ if not st.session_state["logged_in"]:
 
 
 # ---------------- UI ----------------
-st.set_page_config(page_title="SKU Analyzer AI PRO", layout="wide")
-st.title("🔥 SKU Analyzer AI PRO (NEXT LEVEL ENGINE)")
+st.set_page_config(page_title="SKU Analyzer FINAL", layout="wide")
+st.title("🔥 SKU Analyzer AI PRO (FINAL FIXED ENGINE)")
 
 threads = st.sidebar.slider("Threads", 1, 10, 5)
-use_ai = st.sidebar.toggle("🤖 AI SKU Matching")
 
 uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
+
+
+# ---------------- SESSION ----------------
+session = requests.Session()
 
 
 # ---------------- URL DECODER ----------------
@@ -61,33 +59,24 @@ def decode_url(url):
         return url
 
 
-# ---------------- ULTRA FETCH ENGINE ----------------
+# ---------------- HTML FETCH ----------------
 def get_html(url):
     try:
-        headers_pool = [
-            {"User-Agent": "Mozilla/5.0 Chrome/124"},
-            {"User-Agent": "Mozilla/5.0 Firefox/120"},
-            {"User-Agent": "Mozilla/5.0 Safari/537"},
-            {"User-Agent": "Mozilla/5.0 Windows NT 10.0"},
+        headers_list = [
+            {"User-Agent": "Mozilla/5.0 Chrome"},
+            {"User-Agent": "Mozilla/5.0 Firefox"},
+            {"User-Agent": "Mozilla/5.0 Safari"},
         ]
 
-        for _ in range(4):
-            headers = random.choice(headers_pool)
+        for _ in range(3):
+            headers = random.choice(headers_list)
 
-            r = session.get(
-                url,
-                headers=headers,
-                timeout=25,
-                allow_redirects=True
-            )
+            r = session.get(url, headers=headers, timeout=25)
 
             html = r.text or ""
 
-            # 🔥 IMPORTANT: accept partial HTML also
             if len(html) > 150:
                 return html
-
-            time.sleep(1)
 
         return ""
 
@@ -102,26 +91,72 @@ def clean(text):
     return str(text).lower().strip()
 
 
-# ---------------- SMART MATCH ENGINE ----------------
-def smart_match(html, value):
-    if not html or not value:
+# ---------------- SKU MATCH ----------------
+def sku_match(html, sku):
+    if not html or not sku:
         return False
 
     html = html.lower()
-    value = clean(value)
+    sku = clean(sku)
 
-    # direct match
-    if value in html:
+    if sku in html:
         return True
 
-    # token match
-    v_tokens = set(value.split())
-    h_tokens = set(re.findall(r"[a-z0-9]+", html))
+    sku_nums = re.findall(r"\d+", sku)
+    html_nums = re.findall(r"\d+", html)
 
-    if len(v_tokens & h_tokens) >= max(1, len(v_tokens)//2):
+    if sku_nums and html_nums:
+        if sku_nums[0] in html_nums:
+            return True
+
+    sku_tokens = set(sku.split())
+    html_tokens = set(re.findall(r"[a-z0-9]+", html))
+
+    if len(sku_tokens & html_tokens) >= 1:
         return True
 
     return False
+
+
+# ---------------- SELLER MATCH ----------------
+def seller_match(html, seller):
+    if not html or not seller:
+        return False
+
+    html = html.lower()
+    seller = clean(seller).replace(".com", "").replace("www", "")
+
+    if seller in html:
+        return True
+
+    seller_tokens = set(seller.split())
+    html_tokens = set(re.findall(r"[a-z0-9]+", html))
+
+    if len(seller_tokens & html_tokens) >= 1:
+        return True
+
+    return False
+
+
+# ---------------- PRICE MATCH ----------------
+def price_match(html, price):
+    try:
+        if not html or not price:
+            return False
+
+        price = float(re.sub(r"[^0-9.]", "", str(price)))
+
+        html_prices = re.findall(r"\d+\.?\d*", html)
+        html_prices = [float(p) for p in html_prices if p.replace(".", "").isdigit()]
+
+        for p in html_prices:
+            if math.isclose(p, price, rel_tol=0.05):
+                return True
+
+        return False
+
+    except:
+        return False
 
 
 # ---------------- VERIFY ----------------
@@ -130,7 +165,7 @@ def verify(row):
         url = str(row.get("image_url", "") or "").strip()
         sku = str(row.get("product_sku", "") or "").strip()
         seller = str(row.get("product_seller", "") or "").strip()
-        price_raw = row.get("product_price", "")
+        price = row.get("product_price", "")
 
         if not url:
             return row.name, "Missing URL", False, False, False
@@ -138,35 +173,19 @@ def verify(row):
         real_url = decode_url(url)
         html = get_html(real_url)
 
-        # 🔥 NEXT LEVEL FIX (NO FALSE BLOCK)
         if not html:
-            return row.name, "No HTML (fallback processed)", False, False, False
+            return row.name, "No HTML", False, False, False
 
-        # ---------------- SKU ----------------
-        try:
-            sku_ok = smart_match(html, sku)
-        except:
-            sku_ok = False
-
-        # ---------------- SELLER ----------------
-        try:
-            seller_ok = smart_match(html, seller)
-        except:
-            seller_ok = False
-
-        # ---------------- PRICE ----------------
-        try:
-            price = clean(price_raw)
-            price_ok = smart_match(html, price)
-        except:
-            price_ok = False
+        sku_ok = sku_match(html, sku)
+        seller_ok = seller_match(html, seller)
+        price_ok = price_match(html, price)
 
         result = classify_result(sku_ok, seller_ok, price_ok)
 
         return row.name, result, sku_ok, seller_ok, price_ok
 
-    except Exception:
-        return row.name, "Safe Error", False, False, False
+    except:
+        return row.name, "Error Safe", False, False, False
 
 
 # ---------------- MAIN ----------------
@@ -176,7 +195,7 @@ if uploaded_file:
     st.subheader("📊 Preview")
     st.dataframe(df.head())
 
-    if st.button("🚀 RUN NEXT LEVEL ENGINE"):
+    if st.button("🚀 START FINAL ENGINE"):
 
         progress = st.progress(0)
         results = []
@@ -188,14 +207,13 @@ if uploaded_file:
                 results.append(f.result())
                 progress.progress((i + 1) / len(df))
 
-        # ---------------- UPDATE ----------------
         for idx, result, sku_ok, seller_ok, price_ok in results:
             df.loc[idx, "result"] = result
             df.loc[idx, "sku_match"] = "Yes" if sku_ok else "No"
             df.loc[idx, "seller_match"] = "Yes" if seller_ok else "No"
             df.loc[idx, "price_match"] = "Yes" if price_ok else "No"
 
-        st.success("🔥 NEXT LEVEL ENGINE COMPLETE")
+        st.success("🔥 FINAL ENGINE COMPLETE")
 
         st.dataframe(df, use_container_width=True)
 
