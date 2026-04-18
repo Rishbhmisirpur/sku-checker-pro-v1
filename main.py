@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import re
 
 from scraper import get_html
 from matcher import smart_sku_match, smart_seller_match, clean_price, price_match_for_seller, ai_sku_match
@@ -35,12 +36,29 @@ use_ai = st.sidebar.toggle("🤖 AI Matching")
 
 uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
 
-# ---------------- SELLER LOGIC ----------------
+# ---------------- SELLER LOGIC (IMPROVED) ----------------
 def extract_seller_name(html, expected_seller):
     try:
-        if expected_seller.lower() in html.lower():
+        html_lower = html.lower()
+
+        # 🔥 try real seller patterns
+        patterns = [
+            r"sold by[:\s]*([a-zA-Z0-9\s\-&]+)",
+            r"seller[:\s]*([a-zA-Z0-9\s\-&]+)",
+            r"by[:\s]*([a-zA-Z0-9\s\-&]+)"
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, html_lower)
+            if match:
+                return match.group(1).strip()
+
+        # fallback (domain match)
+        if expected_seller.lower() in html_lower:
             return expected_seller
+
         return ""
+
     except:
         return ""
 
@@ -73,7 +91,7 @@ def verify(row):
         price = clean_price(price_raw)
         price_ok = price_match_for_seller(html, seller, price)
 
-        # Seller found
+        # 🔥 FIXED SELLER EXTRACT
         found_seller = extract_seller_name(html, seller)
 
         result = classify_result(sku_ok, seller_ok, price_ok)
@@ -102,7 +120,7 @@ if uploaded_file:
                 results.append((idx, result, sku_ok, seller_ok, price_ok, found_seller))
                 progress.progress((i + 1) / len(df))
 
-        # ✅ RESULT UPDATE (FIXED INDENT)
+        # ✅ RESULT UPDATE
         for idx, result, sku_ok, seller_ok, price_ok, found_seller in results:
             df.loc[idx, "result"] = result
             df.loc[idx, "sku_match"] = "Yes" if sku_ok else "No"
@@ -110,9 +128,12 @@ if uploaded_file:
             df.loc[idx, "price_match"] = "Yes" if price_ok else "No"
             df.loc[idx, "matched_seller"] = found_seller
 
-            # 🔥 exact seller check
+            # 🔥 SMART EXACT MATCH (FIXED)
             if sku_ok:
-                if str(found_seller).strip().lower() == str(df.loc[idx, "product_seller"]).strip().lower():
+                expected = str(df.loc[idx, "product_seller"]).lower()
+                found = str(found_seller).lower()
+
+                if expected in found or found in expected:
                     df.loc[idx, "exact_seller_not_match"] = "No"
                 else:
                     df.loc[idx, "exact_seller_not_match"] = "Yes"
