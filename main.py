@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import re
+from urllib.parse import urlparse
 
 from scraper import get_html
 from matcher import smart_sku_match, smart_seller_match, clean_price, price_match_for_seller, ai_sku_match
@@ -36,29 +37,36 @@ use_ai = st.sidebar.toggle("🤖 AI Matching")
 
 uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
 
-# ---------------- SELLER LOGIC ----------------
-def extract_seller_name(html, expected_seller):
+# ---------------- SELLER FROM IMAGE URL ----------------
+def extract_seller_from_url(url):
     try:
-        html_lower = html.lower()
-        expected = expected_seller.lower().strip()
+        if not url:
+            return ""
 
-        # 1️⃣ priority: sheet seller match
-        if expected and expected in html_lower:
-            return expected_seller
+        parsed = urlparse(url)
+        domain = parsed.netloc.lower()
+        path = parsed.path.lower()
 
-        # 2️⃣ real seller extraction
-        patterns = [
-            r"sold by[:\s]*([a-zA-Z0-9\s\-&\.]+)",
-            r"seller[:\s]*([a-zA-Z0-9\s\-&\.]+)",
-            r"by[:\s]*([a-zA-Z0-9\s\-&\.]+)"
-        ]
+        # domain based seller guess
+        domain_map = {
+            "amazon": "amazon",
+            "flipkart": "flipkart",
+            "myntra": "myntra",
+            "ajio": "ajio",
+            "nykaa": "nykaa"
+        }
 
-        for p in patterns:
-            m = re.search(p, html_lower)
-            if m:
-                return m.group(1).strip()
+        for key, seller in domain_map.items():
+            if key in domain:
+                return seller
 
-        return ""
+        # path based keyword extraction
+        keywords = ["amazon", "flipkart", "myntra", "ajio", "nykaa"]
+        for k in keywords:
+            if k in path:
+                return k
+
+        return domain.split(".")[0]
 
     except:
         return ""
@@ -82,19 +90,18 @@ def verify(row):
         # SKU
         sku_ok = ai_sku_match(html, sku) if use_ai else smart_sku_match(html, sku)
 
-        # Seller
-        seller_ok = smart_seller_match(html, seller)
+        # Seller from IMAGE URL (NEW LOGIC)
+        found_seller = extract_seller_from_url(url)
+
+        # Seller match
+        seller_ok = smart_seller_match(found_seller, seller)
 
         # Price
         price = clean_price(price_raw)
         price_ok = price_match_for_seller(html, seller, price)
 
-        # Seller found
-        found_seller = extract_seller_name(html, seller)
-
         result = classify_result(sku_ok, seller_ok, price_ok)
 
-        # EXACT MATCH LOGIC
         expected = seller.lower().strip()
         found = found_seller.lower().strip()
 
@@ -139,11 +146,9 @@ if uploaded_file:
 
         st.success("✅ Done")
 
-        # FILTER
         if st.toggle("🚨 Show Only Wrong Seller"):
             df = df[df["exact_seller_not_match"] == "Yes"]
 
-        # HIGHLIGHT
         def highlight(row):
             return ["background-color: #ffcccc"] * len(row) if row["exact_seller_not_match"] == "Yes" else [""] * len(row)
 
