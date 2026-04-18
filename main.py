@@ -109,7 +109,8 @@ if uploaded_file:
                 results.append((idx, result, sku_ok, seller_ok, price_ok, image, found_seller))
                 progress.progress((i + 1) / len(df))
 
-     for idx, result, sku_ok, seller_ok, price_ok, image, found_seller in results:
+     for ...
+    df.loc[...] ✅, result, sku_ok, seller_ok, price_ok, image, found_seller in results:
     df.loc[idx, "result"] = result
     df.loc[idx, "sku_match"] = "Yes" if sku_ok else "No"
     df.loc[idx, "seller_match"] = "Yes" if seller_ok else "No"
