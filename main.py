@@ -4,6 +4,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import re
 import base64
 import requests
+import random
+import time
 from urllib.parse import urlparse, parse_qs
 
 from matcher import smart_sku_match, ai_sku_match, clean_price, price_match_for_seller
@@ -32,16 +34,16 @@ if not st.session_state["logged_in"]:
 
 
 # ---------------- UI ----------------
-st.set_page_config(page_title="SKU Analyzer PRO", layout="wide")
+st.set_page_config(page_title="SKU Analyzer AI PRO", layout="wide")
 st.title("🔥 SKU Analyzer AI PRO (FINAL STABLE)")
 
 threads = st.sidebar.slider("Threads", 1, 10, 5)
-use_ai = st.sidebar.toggle("🤖 AI Mode")
+use_ai = st.sidebar.toggle("🤖 AI SKU Matching")
 
 uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
 
 
-# ---------------- SAFE URL DECODE ----------------
+# ---------------- URL DECODE ----------------
 def decode_url(url):
     try:
         parsed = urlparse(url)
@@ -55,50 +57,83 @@ def decode_url(url):
         return url
 
 
-# ---------------- SAFE HTML FETCH (NO CRASH) ----------------
+# ---------------- SAFE HTML FETCH (BLOCK BYPASS LIGHT) ----------------
 def get_html(url):
     try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-        }
+        headers_list = [
+            {"User-Agent": "Mozilla/5.0"},
+            {"User-Agent": "Mozilla/5.0 Windows NT 10.0"},
+            {"User-Agent": "Mozilla/5.0 Mac OS X"},
+        ]
 
-        r = requests.get(url, headers=headers, timeout=20)
+        for _ in range(2):
+            headers = random.choice(headers_list)
+            r = requests.get(url, headers=headers, timeout=25)
 
-        # block / redirect safe handling
-        if r.status_code != 200:
-            return ""
+            if r.status_code == 200 and len(r.text) > 500:
+                return r.text
 
-        return r.text
+            time.sleep(1)
+
+        return ""
 
     except:
         return ""
 
 
-# ---------------- SAFE NORMALIZE ----------------
+# ---------------- NORMALIZE ----------------
 def normalize(text):
-    if text is None:
-        return ""
     text = str(text).lower()
     text = re.sub(r"[^a-z0-9]+", " ", text)
     return text.strip()
 
 
-# ---------------- SAFE SELLER MATCH ----------------
-def seller_match(html, sheet_seller):
+# ---------------- SELLER EXTRACTION ----------------
+def extract_sellers(html):
     if not html:
-        return False
+        return []
 
-    sheet = normalize(sheet_seller)
     html = html.lower()
+    sellers = set()
 
-    # simple keyword detection (robust)
-    if sheet and sheet in html:
-        return True
+    patterns = [
+        r"mitzi at ([a-z0-9\s\-&]+)",
+        r"sold by[:\s]*([a-z0-9\s\-&]+)",
+        r"merchant[:\s]*([a-z0-9\s\-&]+)",
+        r"brand[:\s]*([a-z0-9\s\-&]+)",
+        r"lighting new york",
+        r"wayfair",
+        r"lumens",
+        r"ferguson"
+    ]
+
+    for p in patterns:
+        matches = re.findall(p, html)
+        for m in matches:
+            sellers.add(normalize(m))
+
+    return list(sellers)
+
+
+# ---------------- SELLER MATCH ----------------
+def seller_match(html, sheet_seller):
+    sheet = normalize(sheet_seller)
+    sellers = extract_sellers(html)
+
+    for s in sellers:
+        if not s:
+            continue
+
+        if sheet in s or s in sheet:
+            return True
+
+        if len(set(sheet.split()) & set(s.split())) >= 2:
+            return True
 
     return False
 
 
-# ---------------- SAFE VERIFY ----------------
+# ---------------- VERIFY ----------------
 def verify(row):
     try:
         url = str(row.get("image_url", "") or "").strip()
@@ -112,36 +147,35 @@ def verify(row):
         real_url = decode_url(url)
         html = get_html(real_url)
 
-        # ---------------- SAFE DEFAULTS ----------------
+        # 🔥 SAFE FALLBACK
         if not html:
             return row.name, "Blocked/No HTML", False, False, False
 
-        # ---------------- SKU ----------------
+        # SKU
         try:
             sku_ok = ai_sku_match(html, sku) if use_ai else smart_sku_match(html, sku)
         except:
             sku_ok = False
 
-        # ---------------- SELLER ----------------
+        # SELLER
         try:
             seller_ok = seller_match(html, seller)
         except:
             seller_ok = False
 
-        # ---------------- PRICE ----------------
+        # PRICE
         try:
             price = clean_price(price_raw)
             price_ok = price_match_for_seller(html, seller, price)
         except:
             price_ok = False
 
-        # ---------------- FINAL RESULT ----------------
         result = classify_result(sku_ok, seller_ok, price_ok)
 
         return row.name, result, sku_ok, seller_ok, price_ok
 
     except Exception:
-        return row.name, "Error Safe Fallback", False, False, False
+        return row.name, "Error Safe", False, False, False
 
 
 # ---------------- MAIN ----------------
@@ -151,7 +185,7 @@ if uploaded_file:
     st.subheader("📊 Preview")
     st.dataframe(df.head())
 
-    if st.button("🚀 Start Check"):
+    if st.button("🚀 START CHECK"):
 
         progress = st.progress(0)
         results = []
@@ -163,16 +197,16 @@ if uploaded_file:
                 results.append(f.result())
                 progress.progress((i + 1) / len(df))
 
-        # ---------------- UPDATE DF ----------------
+        # UPDATE DF
         for idx, result, sku_ok, seller_ok, price_ok in results:
             df.loc[idx, "result"] = result
             df.loc[idx, "sku_match"] = "Yes" if sku_ok else "No"
             df.loc[idx, "seller_match"] = "Yes" if seller_ok else "No"
             df.loc[idx, "price_match"] = "Yes" if price_ok else "No"
 
-        st.success("✅ DONE - NO ERRORS VERSION")
+        st.success("✅ DONE - FINAL STABLE VERSION")
 
-        # SAFE DISPLAY
+        # SAFE OUTPUT (NO CRASH)
         st.dataframe(df, use_container_width=True)
 
         st.download_button(
