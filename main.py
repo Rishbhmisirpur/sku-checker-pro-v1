@@ -28,7 +28,12 @@ def verify(row):
 
     sku_ok = sku_match(html, sku)
     seller_ok = seller_match(html, seller)
-    price_ok = price_match(html, price)
+
+    # ✅ ONLY PRICE CHECK IF SELLER MATCHED
+    if seller_ok:
+        price_ok = price_match(html, price)
+    else:
+        price_ok = False   # seller mismatch → ignore price logic
 
     final_result = classify(sku_ok, seller_ok, price_ok)
 
