@@ -116,11 +116,14 @@ if uploaded_file:
             df.loc[idx, "price_match"] = "Yes" if price_ok else "No"
             df.loc[idx, "matched_seller"] = found_seller
 
-            # 🔥 exact seller check
-            if sku_ok and not seller_ok:
-                df.loc[idx, "exact_seller_not_match"] = "Yes"
-            else:
-                df.loc[idx, "exact_seller_not_match"] = "No"
+           # 🔥 exact seller check (FINAL FIX)
+if sku_ok:
+    if seller.strip().lower() == found_seller.strip().lower():
+        df.loc[idx, "exact_seller_not_match"] = "No"
+    else:
+        df.loc[idx, "exact_seller_not_match"] = "Yes"
+else:
+    df.loc[idx, "exact_seller_not_match"] = "No"
 
         st.success("✅ Done")
 
