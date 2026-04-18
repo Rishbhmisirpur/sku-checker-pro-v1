@@ -72,6 +72,7 @@ def verify(row):
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
 
+    st.subheader("📊 Preview")
     st.dataframe(df.head())
 
     if st.button("🚀 Start Check"):
@@ -96,11 +97,36 @@ if uploaded_file:
 
         st.success("✅ Done")
 
+        # 🔥 COLUMN RENAME (FINAL OUTPUT)
+        df.rename(columns={
+            "sku": "product_sku",
+            "url": "image_url",
+            "seller": "product_seller",
+            "price": "product_price"
+        }, inplace=True)
+
+        # 🔥 COLUMN ORDER FIX
+        final_cols = [
+            "product_sku",
+            "image_url",
+            "product_seller",
+            "product_price",
+            "image",
+            "result",
+            "sku_match",
+            "seller_match",
+            "price_match"
+        ]
+
+        df = df[[col for col in final_cols if col in df.columns]]
+
         show_metrics(df)
         show_chart(df)
 
+        st.subheader("📋 Results")
         st.dataframe(df)
 
+        # 🖼️ IMAGE PREVIEW
         if "image" in df.columns:
             st.subheader("🖼️ Image Preview")
             st.image(df["image"].dropna().head(5).tolist(), width=120)
