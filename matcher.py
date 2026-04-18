@@ -5,77 +5,60 @@ def normalize(text):
     return str(text).lower().replace(".com", "").replace("www", "").strip()
 
 
-# ---------------- SKU MATCH ----------------
 def sku_match(html, sku):
     if not html or not sku:
         return False
 
-    html = html.lower()
-    sku = str(sku).lower()
-
-    if sku in html:
-        return True
-
-    sku_nums = re.findall(r"\d+", sku)
-    html_nums = re.findall(r"\d+", html)
-
-    if sku_nums and html_nums:
-        return sku_nums[0] in html_nums
-
-    return False
+    return str(sku).lower() in html.lower()
 
 
-# ---------------- SELLER MATCH ----------------
 def seller_match(html, seller):
     if not html or not seller:
         return False
 
-    html = html.lower()
-    seller = normalize(seller)
-
-    return seller in html
+    return normalize(seller) in html.lower()
 
 
-# ---------------- SELLER BLOCK EXTRACTION ----------------
-def get_seller_block(html, seller):
-    html_low = html.lower()
-    seller = normalize(seller)
-
-    if seller not in html_low:
-        return ""
-
-    parts = html_low.split(seller)
-
-    # only nearby content (important fix)
-    return parts[1][:4000]
+# 🔥 SMART PRICE EXTRACT (NO BLOCK DEPENDENCY)
+def extract_all_prices(html):
+    # captures: 586, 586.00, $586, ₹586
+    return re.findall(r"\d+(?:\.\d+)?", html)
 
 
-# ---------------- PRICE MATCH (STRICT) ----------------
+# 🔥 SELLER + PRICE SMART CHECK
 def price_match(html, sheet_price, seller):
     try:
-        if not html or not sheet_price or not seller:
+        if not html or not sheet_price:
             return False
 
-        block = get_seller_block(html, seller)
+        html_low = html.lower()
+        seller = normalize(seller)
 
-        if not block:
+        # 🔥 STEP 1: ensure seller exists
+        if seller not in html_low:
             return False
 
-        prices = re.findall(r"\d+(?:\.\d+)?", block)
+        # 🔥 STEP 2: extract all prices near seller
+        split = html_low.split(seller)
+
+        if len(split) < 2:
+            return False
+
+        near_text = split[1][:5000]  # expanded window
+
+        prices = extract_all_prices(near_text)
 
         if not prices:
             return False
 
-        scraped_price = float(prices[0])
-        sheet_price = float(sheet_price)
+        sheet_price = str(int(float(sheet_price)))
 
-        return scraped_price == sheet_price
+        return sheet_price in prices
 
     except:
         return False
 
 
-# ---------------- FINAL CLASSIFICATION ----------------
 def classify(sku_ok, seller_ok, price_ok):
     if sku_ok and seller_ok and price_ok:
         return "YES"
