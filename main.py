@@ -2,15 +2,13 @@ import streamlit as st
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import re
-from urllib.parse import urlparse
+import base64
+from urllib.parse import urlparse, parse_qs
 
 from scraper import get_html
-from matcher import smart_sku_match, clean_price, price_match_for_seller, ai_sku_match
+from matcher import smart_sku_match, ai_sku_match, clean_price, price_match_for_seller
 from utils import classify_result
 from ui import show_metrics, show_chart
-
-# ⚡ OPTIONAL BEST MATCH (install: pip install rapidfuzz)
-from rapidfuzz import fuzz
 
 
 # ---------------- LOGIN ----------------
@@ -44,7 +42,38 @@ use_ai = st.sidebar.toggle("🤖 AI Matching")
 uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
 
 
-# ---------------- SELLER NORMALIZER ----------------
+# ---------------- URL DECODER ----------------
+def decode_real_url(url):
+    try:
+        parsed = urlparse(url)
+        qs = parse_qs(parsed.query)
+
+        if "page_link" in qs:
+            encoded = qs["page_link"][0]
+            decoded = base64.b64decode(encoded).decode("utf-8")
+            return decoded
+
+        return url
+    except:
+        return url
+
+
+# ---------------- SELLER EXTRACT (REAL DOMAIN) ----------------
+def extract_seller_from_url(url):
+    try:
+        real_url = decode_real_url(url)
+
+        parsed = urlparse(real_url)
+        domain = parsed.netloc.lower().replace("www.", "")
+
+        # lightingnewyork.com → lightingnewyork
+        return domain.split(".")[0]
+
+    except:
+        return ""
+
+
+# ---------------- NORMALIZE ----------------
 def normalize(text):
     text = str(text).lower().strip()
     text = re.sub(r"https?://", "", text)
@@ -53,47 +82,26 @@ def normalize(text):
     return text.strip()
 
 
-# ---------------- EXTRACT FROM IMAGE URL ONLY ----------------
-def extract_seller_from_url(url):
-    try:
-        parsed = urlparse(url)
-        domain = parsed.netloc.lower()
-
-        # remove www
-        domain = domain.replace("www.", "")
-
-        # split domain (lightingnewyork.com → lightingnewyork)
-        base = domain.split(".")[0]
-
-        return normalize(base)
-
-    except:
-        return ""
-
-
-# ---------------- SMART MATCH ENGINE ----------------
-def smart_seller_match(url_seller, sheet_seller):
-    a = normalize(url_seller)
-    b = normalize(sheet_seller)
+# ---------------- SMART MATCH ----------------
+def smart_seller_match(a, b):
+    a = normalize(a)
+    b = normalize(b)
 
     if not a or not b:
         return False
 
-    # 1️⃣ direct inclusion match
+    # direct match
     if a in b or b in a:
         return True
 
-    # 2️⃣ token overlap (important for "lighting new york")
+    # token match
     a_tokens = set(a.split())
     b_tokens = set(b.split())
 
     if len(a_tokens & b_tokens) >= 2:
         return True
 
-    # 3️⃣ fuzzy match (main brain)
-    score = fuzz.token_set_ratio(a, b)
-
-    return score >= 70
+    return False
 
 
 # ---------------- VERIFY ----------------
@@ -115,8 +123,9 @@ def verify(row):
         # SKU MATCH
         sku_ok = ai_sku_match(html, sku) if use_ai else smart_sku_match(html, sku)
 
-        # 🔥 SELLER ONLY FROM IMAGE URL (NO HTML)
+        # 🔥 REAL SELLER FROM DECODED URL
         url_seller = extract_seller_from_url(url)
+
         seller_ok = smart_seller_match(url_seller, seller)
 
         # PRICE
