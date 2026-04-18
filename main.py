@@ -10,14 +10,13 @@ from ui import chat_support, show_metrics, show_chart
 init_db()
 
 st.set_page_config(layout="wide")
-st.title("🚀 FINAL SKU VERIFICATION SYSTEM")
+st.title("🚀 FINAL SKU SYSTEM")
 
 chat_support()
 
 file = st.file_uploader("Upload CSV")
 
 
-# ---------------- VERIFY ----------------
 def verify(row):
     url = row.get("image_url")
     sku = row.get("product_sku")
@@ -26,28 +25,23 @@ def verify(row):
 
     html = get_html(url)
 
-    # 🔥 DEBUG STEP (IMPORTANT)
-    if not html or len(html) < 500:
+    # 🔥 IF HTML EMPTY → DIRECT FAIL
+    if not html:
         return {
             "sku": sku,
             "seller": seller,
             "price": price,
-            "sku_match": "No (HTML Empty)",
-            "seller_match": "No (HTML Empty)",
-            "price_match": "No (HTML Empty)",
+            "sku_match": "No",
+            "seller_match": "No",
+            "price_match": "No",
             "final_result": "NO"
         }
 
-    # ---------------- MATCH ----------------
     sku_ok = sku_match(html, sku)
     seller_ok = seller_match(html, seller)
 
-    # 🔥 ONLY CHECK PRICE IF SELLER FOUND
-    price_ok = False
-    if seller_ok:
-        price_ok = price_match(html, price, seller)
+    price_ok = price_match(html, price, seller) if seller_ok else False
 
-    # ---------------- FINAL ----------------
     final_result = classify(sku_ok, seller_ok, price_ok)
 
     save_result(sku, seller, price, final_result)
@@ -63,7 +57,6 @@ def verify(row):
     }
 
 
-# ---------------- RUN ----------------
 if file:
     df = pd.read_csv(file)
 
