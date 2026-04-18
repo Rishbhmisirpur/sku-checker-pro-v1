@@ -43,63 +43,66 @@ uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
 
 
 # ---------------- URL DECODER ----------------
-def decode_real_url(url):
+def decode_url(url):
     try:
         parsed = urlparse(url)
         qs = parse_qs(parsed.query)
 
         if "page_link" in qs:
-            encoded = qs["page_link"][0]
-            decoded = base64.b64decode(encoded).decode("utf-8")
-            return decoded
+            return base64.b64decode(qs["page_link"][0]).decode("utf-8")
 
         return url
     except:
         return url
-
-
-# ---------------- SELLER EXTRACT (REAL DOMAIN) ----------------
-def extract_seller_from_url(url):
-    try:
-        real_url = decode_real_url(url)
-
-        parsed = urlparse(real_url)
-        domain = parsed.netloc.lower().replace("www.", "")
-
-        # lightingnewyork.com → lightingnewyork
-        return domain.split(".")[0]
-
-    except:
-        return ""
 
 
 # ---------------- NORMALIZE ----------------
 def normalize(text):
-    text = str(text).lower().strip()
-    text = re.sub(r"https?://", "", text)
-    text = re.sub(r"www\.", "", text)
+    text = str(text).lower()
     text = re.sub(r"[^a-z0-9]+", " ", text)
     return text.strip()
 
 
+# ---------------- SELLER EXTRACTION FROM HTML ----------------
+def extract_sellers(html):
+    html = html.lower()
+    sellers = set()
+
+    patterns = [
+        r"mitzi at ([a-z0-9\s\-&]+)",
+        r"sold by[:\s]*([a-z0-9\s\-&]+)",
+        r"merchant[:\s]*([a-z0-9\s\-&]+)",
+        r"by ([a-z0-9\s\-&]+)",
+        r"lighting new york",
+        r"wayfair",
+        r"lumens",
+        r"ferguson"
+    ]
+
+    for p in patterns:
+        matches = re.findall(p, html)
+        for m in matches:
+            sellers.add(normalize(m))
+
+    return list(sellers)
+
+
 # ---------------- SMART MATCH ----------------
-def smart_seller_match(a, b):
-    a = normalize(a)
-    b = normalize(b)
+def seller_match(html, sheet_seller):
+    sheet = normalize(sheet_seller)
+    sellers = extract_sellers(html)
 
-    if not a or not b:
-        return False
+    for s in sellers:
+        if not s:
+            continue
 
-    # direct match
-    if a in b or b in a:
-        return True
+        # direct match
+        if sheet in s or s in sheet:
+            return True
 
-    # token match
-    a_tokens = set(a.split())
-    b_tokens = set(b.split())
-
-    if len(a_tokens & b_tokens) >= 2:
-        return True
+        # token overlap
+        if len(set(sheet.split()) & set(s.split())) >= 2:
+            return True
 
     return False
 
@@ -115,18 +118,17 @@ def verify(row):
         if not url:
             return row.name, "Error", False, False, False, "", ""
 
-        html = get_html(url)
+        real_url = decode_url(url)
+        html = get_html(real_url)
 
         if not html:
             return row.name, "Error", False, False, False, "", ""
 
-        # SKU MATCH
+        # SKU
         sku_ok = ai_sku_match(html, sku) if use_ai else smart_sku_match(html, sku)
 
-        # 🔥 REAL SELLER FROM DECODED URL
-        url_seller = extract_seller_from_url(url)
-
-        seller_ok = smart_seller_match(url_seller, seller)
+        # SELLER (FINAL FIX)
+        seller_ok = seller_match(html, seller)
 
         # PRICE
         price = clean_price(price_raw)
@@ -134,15 +136,8 @@ def verify(row):
 
         result = classify_result(sku_ok, seller_ok, price_ok)
 
-        expected = normalize(seller)
-        found = normalize(url_seller)
-
-        if sku_ok and expected and expected in found:
-            exact_flag = "No"
-            matched_seller = seller
-        else:
-            exact_flag = "Yes"
-            matched_seller = url_seller
+        matched_seller = "Matched" if seller_ok else "No Match"
+        exact_flag = "No" if seller_ok else "Yes"
 
         return row.name, result, sku_ok, seller_ok, price_ok, matched_seller, exact_flag
 
