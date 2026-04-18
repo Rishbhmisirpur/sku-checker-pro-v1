@@ -1,36 +1,42 @@
+import requests
+import time
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-import time
+from webdriver_manager.chrome import ChromeDriverManager
+
+session = requests.Session()
+session.headers.update({"User-Agent": "Mozilla/5.0"})
 
 
-def get_driver():
-    options = Options()
-    options.add_argument("--headless=new")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--window-size=1920,1080")
-    options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36")
+def fetch_html(url):
 
-    return webdriver.Chrome(options=options)
+    # requests first
+    for _ in range(2):
+        try:
+            r = session.get(url, timeout=8)
+            if r.status_code == 200:
+                return r.text.lower()
+        except:
+            pass
+        time.sleep(1)
 
-
-def get_html(url):
+    # selenium fallback
     try:
-        driver = get_driver()
+        options = Options()
+        options.add_argument("--headless=new")
+
+        driver = webdriver.Chrome(
+            service=webdriver.chrome.service.Service(ChromeDriverManager().install()),
+            options=options
+        )
+
         driver.get(url)
+        time.sleep(5)
 
-        # 🔥 IMPORTANT WAIT (fix JS sites)
-        time.sleep(10)
-
-        html = driver.page_source
-
+        html = driver.page_source.lower()
         driver.quit()
-
-        if not html or len(html) < 1000:
-            return ""
 
         return html
 
-    except Exception as e:
-        print("SCRAPER ERROR:", e)
+    except:
         return ""
