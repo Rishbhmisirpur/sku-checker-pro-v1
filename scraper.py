@@ -1,6 +1,6 @@
-import time
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+import time
 
 
 def get_driver():
@@ -18,12 +18,12 @@ def get_html(url):
         driver = get_driver()
         driver.get(url)
 
-        time.sleep(8)  # important wait for JS load
+        time.sleep(7)
 
         html = driver.page_source
         driver.quit()
 
-        return html if html and len(html) > 1000 else ""
+        return html
 
     except:
         return ""
