@@ -115,7 +115,6 @@ if uploaded_file:
             df.loc[idx, "sku_match"] = "Yes" if sku_ok else "No"
             df.loc[idx, "seller_match"] = "Yes" if seller_ok else "No"
             df.loc[idx, "price_match"] = "Yes" if price_ok else "No"
-            df.loc[idx, "image"] = image
             df.loc[idx, "matched_seller"] = found_seller
 
             # 🔥 exact seller check
@@ -151,18 +150,6 @@ if uploaded_file:
 
         show_metrics(df)
         show_chart(df)
-
-        # 🖼️ SAFE IMAGE PREVIEW (NO ERROR)
-        valid_images = []
-        for img in df["image"].dropna():
-            if isinstance(img, str) and img.startswith("http"):
-                valid_images.append(img)
-
-        if valid_images:
-            st.subheader("🖼️ Image Preview")
-            st.image(valid_images[:5], width=120)
-        else:
-            st.info("No valid images found")
 
         st.download_button(
             "📥 Download CSV",
