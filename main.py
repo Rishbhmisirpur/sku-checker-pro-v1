@@ -8,8 +8,6 @@ import random
 import math
 from urllib.parse import urlparse, parse_qs
 
-from matcher import classify_result
-
 
 # ---------------- LOGIN ----------------
 def login():
@@ -34,7 +32,7 @@ if not st.session_state["logged_in"]:
 
 # ---------------- UI ----------------
 st.set_page_config(page_title="SKU Analyzer FINAL", layout="wide")
-st.title("🔥 SKU Analyzer AI PRO (FINAL FIXED ENGINE)")
+st.title("🔥 SKU Analyzer AI PRO (FINAL WORKING)")
 
 threads = st.sidebar.slider("Threads", 1, 10, 5)
 
@@ -45,7 +43,7 @@ uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
 session = requests.Session()
 
 
-# ---------------- URL DECODER ----------------
+# ---------------- URL DECODE ----------------
 def decode_url(url):
     try:
         parsed = urlparse(url)
@@ -70,9 +68,7 @@ def get_html(url):
 
         for _ in range(3):
             headers = random.choice(headers_list)
-
             r = session.get(url, headers=headers, timeout=25)
-
             html = r.text or ""
 
             if len(html) > 150:
@@ -112,10 +108,7 @@ def sku_match(html, sku):
     sku_tokens = set(sku.split())
     html_tokens = set(re.findall(r"[a-z0-9]+", html))
 
-    if len(sku_tokens & html_tokens) >= 1:
-        return True
-
-    return False
+    return len(sku_tokens & html_tokens) >= 1
 
 
 # ---------------- SELLER MATCH ----------------
@@ -132,10 +125,7 @@ def seller_match(html, seller):
     seller_tokens = set(seller.split())
     html_tokens = set(re.findall(r"[a-z0-9]+", html))
 
-    if len(seller_tokens & html_tokens) >= 1:
-        return True
-
-    return False
+    return len(seller_tokens & html_tokens) >= 1
 
 
 # ---------------- PRICE MATCH ----------------
@@ -157,6 +147,18 @@ def price_match(html, price):
 
     except:
         return False
+
+
+# ---------------- CLASSIFIER (INLINE FIX) ----------------
+def classify_result(sku_ok, seller_ok, price_ok):
+    if sku_ok and seller_ok and price_ok:
+        return "Perfect Match"
+    elif sku_ok and seller_ok:
+        return "Partial Match"
+    elif sku_ok:
+        return "SKU Only"
+    else:
+        return "No Match"
 
 
 # ---------------- VERIFY ----------------
@@ -195,7 +197,7 @@ if uploaded_file:
     st.subheader("📊 Preview")
     st.dataframe(df.head())
 
-    if st.button("🚀 START FINAL ENGINE"):
+    if st.button("🚀 START CHECK"):
 
         progress = st.progress(0)
         results = []
@@ -213,7 +215,7 @@ if uploaded_file:
             df.loc[idx, "seller_match"] = "Yes" if seller_ok else "No"
             df.loc[idx, "price_match"] = "Yes" if price_ok else "No"
 
-        st.success("🔥 FINAL ENGINE COMPLETE")
+        st.success("🔥 FINAL FIX COMPLETE")
 
         st.dataframe(df, use_container_width=True)
 
