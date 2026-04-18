@@ -1,19 +1,17 @@
-import sqlite3
+import os
 
-conn = sqlite3.connect("data.db")
-c = conn.cursor()
+files = [
+    "main.py",
+    "db.py",
+    "matcher.py",
+    "scraper.py",
+    "ui.py",
+    "utils.py",
+    "requirements.txt"
+]
 
-c.execute("""
-CREATE TABLE IF NOT EXISTS results (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    sku TEXT,
-    seller TEXT,
-    price TEXT,
-    result TEXT
-)
-""")
+for f in files:
+    if not os.path.exists(f):
+        open(f, "w").write("")
 
-conn.commit()
-conn.close()
-
-print("Database ready")
+print("Project setup done 🚀")
