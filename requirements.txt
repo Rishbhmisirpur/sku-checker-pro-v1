@@ -8,3 +8,5 @@ beautifulsoup4
 openai
 rapidfuzz
 playwright
+beautifulsoup4
+lxml
