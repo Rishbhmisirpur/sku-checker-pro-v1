@@ -1,31 +1,33 @@
 import streamlit as st
 
+def render_row(df):
+    placeholder = st.empty()
 
-def chat_support():
-    st.sidebar.title("💬 Support")
+    latest = df.dropna(subset=["result"]).tail(5)
 
-    msg = st.sidebar.text_input("Ask issue")
+    with placeholder.container():
+        for _, r in latest.iterrows():
+            st.markdown("---")
+            c1, c2 = st.columns([1, 2])
 
-    if st.sidebar.button("Send"):
-        st.sidebar.success("Request received")
+            with c1:
+                st.write("SKU:", r["sku"])
+                st.write("Seller:", r["seller"])
+                st.write("Price:", r["price"])
+                st.write("Result:", r["result"])
 
-
-def show_metrics(df):
-    st.subheader("📊 Summary")
-
-    if "final_result" in df.columns:
-        st.write(df["final_result"].value_counts())
-
-    if "sku_match" in df.columns:
-        st.write(df["sku_match"].value_counts())
-
-    if "seller_match" in df.columns:
-        st.write(df["seller_match"].value_counts())
-
-    if "price_match" in df.columns:
-        st.write(df["price_match"].value_counts())
+            with c2:
+                st.markdown(
+                    f'<iframe src="{r["url"]}" width="100%" height="300"></iframe>',
+                    unsafe_allow_html=True
+                )
 
 
-def show_chart(df):
-    if "final_result" in df.columns:
-        st.bar_chart(df["final_result"].value_counts())
+def render_result(df):
+    st.success("✅ Completed")
+
+    st.download_button(
+        "📥 Download",
+        df.to_csv(index=False).encode(),
+        "result.csv"
+    )
