@@ -79,7 +79,7 @@ def verify(row):
         image = extract_image(html) or ""
 
         # 🔥 SELLER FOUND
-        found_seller = extract_seller_name(html) or ""
+        found_seller = extract_seller_name(html, seller) or ""
 
         # 🔥 RESULT
         result = classify_result(sku_ok, seller_ok, price_ok)
