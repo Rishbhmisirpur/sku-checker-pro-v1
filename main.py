@@ -1,226 +1,81 @@
 import streamlit as st
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import re
-import base64
-import requests
-import random
-import math
-from urllib.parse import urlparse, parse_qs
+
+from scraper import get_html
+from matcher import sku_match, seller_match, price_match, ai_sku_match, classify
+from db import save_result
+from ui import chat_support, show_metrics, show_chart
 
 
 # ---------------- LOGIN ----------------
-def login():
-    st.title("🔐 Login Required")
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
+st.set_page_config(layout="wide")
 
-    if st.button("Login"):
-        if username == "admin" and password == "1234":
-            st.session_state["logged_in"] = True
-        else:
-            st.error("Invalid login")
+if "login" not in st.session_state:
+    st.session_state.login = False
+
+st.sidebar.title("🔐 LOGIN")
+
+user = st.sidebar.text_input("User")
+pwd = st.sidebar.text_input("Pass", type="password")
+
+if st.sidebar.button("Login"):
+    if user == "admin" and pwd == "1234":
+        st.session_state.login = True
+    elif user == "guest":
+        st.session_state.login = True
+    else:
+        st.sidebar.error("Invalid")
 
 
-if "logged_in" not in st.session_state:
-    st.session_state["logged_in"] = False
-
-if not st.session_state["logged_in"]:
-    login()
+if not st.session_state.login:
     st.stop()
 
 
 # ---------------- UI ----------------
-st.set_page_config(page_title="SKU Analyzer FINAL", layout="wide")
-st.title("🔥 SKU Analyzer AI PRO (FINAL WORKING)")
+st.title("🚀 AI SKU PRO SAAS SYSTEM")
 
-threads = st.sidebar.slider("Threads", 1, 10, 5)
+chat_support()
 
-uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
-
-
-# ---------------- SESSION ----------------
-session = requests.Session()
+file = st.file_uploader("Upload CSV")
 
 
-# ---------------- URL DECODE ----------------
-def decode_url(url):
-    try:
-        parsed = urlparse(url)
-        qs = parse_qs(parsed.query)
-
-        if "page_link" in qs:
-            return base64.b64decode(qs["page_link"][0]).decode("utf-8")
-
-        return url
-    except:
-        return url
-
-
-# ---------------- HTML FETCH ----------------
-def get_html(url):
-    try:
-        headers_list = [
-            {"User-Agent": "Mozilla/5.0 Chrome"},
-            {"User-Agent": "Mozilla/5.0 Firefox"},
-            {"User-Agent": "Mozilla/5.0 Safari"},
-        ]
-
-        for _ in range(3):
-            headers = random.choice(headers_list)
-            r = session.get(url, headers=headers, timeout=25)
-            html = r.text or ""
-
-            if len(html) > 150:
-                return html
-
-        return ""
-
-    except:
-        return ""
-
-
-# ---------------- CLEAN ----------------
-def clean(text):
-    if not text:
-        return ""
-    return str(text).lower().strip()
-
-
-# ---------------- SKU MATCH ----------------
-def sku_match(html, sku):
-    if not html or not sku:
-        return False
-
-    html = html.lower()
-    sku = clean(sku)
-
-    if sku in html:
-        return True
-
-    sku_nums = re.findall(r"\d+", sku)
-    html_nums = re.findall(r"\d+", html)
-
-    if sku_nums and html_nums:
-        if sku_nums[0] in html_nums:
-            return True
-
-    sku_tokens = set(sku.split())
-    html_tokens = set(re.findall(r"[a-z0-9]+", html))
-
-    return len(sku_tokens & html_tokens) >= 1
-
-
-# ---------------- SELLER MATCH ----------------
-def seller_match(html, seller):
-    if not html or not seller:
-        return False
-
-    html = html.lower()
-    seller = clean(seller).replace(".com", "").replace("www", "")
-
-    if seller in html:
-        return True
-
-    seller_tokens = set(seller.split())
-    html_tokens = set(re.findall(r"[a-z0-9]+", html))
-
-    return len(seller_tokens & html_tokens) >= 1
-
-
-# ---------------- PRICE MATCH ----------------
-def price_match(html, price):
-    try:
-        if not html or not price:
-            return False
-
-        price = float(re.sub(r"[^0-9.]", "", str(price)))
-
-        html_prices = re.findall(r"\d+\.?\d*", html)
-        html_prices = [float(p) for p in html_prices if p.replace(".", "").isdigit()]
-
-        for p in html_prices:
-            if math.isclose(p, price, rel_tol=0.05):
-                return True
-
-        return False
-
-    except:
-        return False
-
-
-# ---------------- CLASSIFIER (INLINE FIX) ----------------
-def classify_result(sku_ok, seller_ok, price_ok):
-    if sku_ok and seller_ok and price_ok:
-        return "Perfect Match"
-    elif sku_ok and seller_ok:
-        return "Partial Match"
-    elif sku_ok:
-        return "SKU Only"
-    else:
-        return "No Match"
-
-
-# ---------------- VERIFY ----------------
 def verify(row):
-    try:
-        url = str(row.get("image_url", "") or "").strip()
-        sku = str(row.get("product_sku", "") or "").strip()
-        seller = str(row.get("product_seller", "") or "").strip()
-        price = row.get("product_price", "")
+    url = row.get("image_url")
+    sku = row.get("product_sku")
+    seller = row.get("product_seller")
+    price = row.get("product_price")
 
-        if not url:
-            return row.name, "Missing URL", False, False, False
+    html = get_html(url)
 
-        real_url = decode_url(url)
-        html = get_html(real_url)
+    sku_ok = ai_sku_match(html, sku)
+    seller_ok = seller_match(html, seller)
+    price_ok = price_match(html, price)
 
-        if not html:
-            return row.name, "No HTML", False, False, False
+    result = classify(sku_ok, seller_ok, price_ok)
 
-        sku_ok = sku_match(html, sku)
-        seller_ok = seller_match(html, seller)
-        price_ok = price_match(html, price)
+    save_result(sku, seller, price, result)
 
-        result = classify_result(sku_ok, seller_ok, price_ok)
-
-        return row.name, result, sku_ok, seller_ok, price_ok
-
-    except:
-        return row.name, "Error Safe", False, False, False
+    return result
 
 
-# ---------------- MAIN ----------------
-if uploaded_file:
-    df = pd.read_csv(uploaded_file)
+if file:
+    df = pd.read_csv(file)
 
-    st.subheader("📊 Preview")
-    st.dataframe(df.head())
-
-    if st.button("🚀 START CHECK"):
-
-        progress = st.progress(0)
+    if st.button("RUN ENGINE"):
         results = []
 
-        with ThreadPoolExecutor(max_workers=threads) as executor:
-            futures = [executor.submit(verify, row) for _, row in df.iterrows()]
+        with ThreadPoolExecutor(max_workers=5) as ex:
+            futures = [ex.submit(verify, r) for _, r in df.iterrows()]
 
-            for i, f in enumerate(as_completed(futures)):
+            for f in futures:
                 results.append(f.result())
-                progress.progress((i + 1) / len(df))
 
-        for idx, result, sku_ok, seller_ok, price_ok in results:
-            df.loc[idx, "result"] = result
-            df.loc[idx, "sku_match"] = "Yes" if sku_ok else "No"
-            df.loc[idx, "seller_match"] = "Yes" if seller_ok else "No"
-            df.loc[idx, "price_match"] = "Yes" if price_ok else "No"
+        df["result"] = results
 
-        st.success("🔥 FINAL FIX COMPLETE")
+        st.dataframe(df)
 
-        st.dataframe(df, use_container_width=True)
+        show_metrics(df)
+        show_chart(df)
 
-        st.download_button(
-            "📥 Download CSV",
-            df.to_csv(index=False),
-            "result.csv"
-        )
+        st.download_button("Download", df.to_csv(index=False), "result.csv")
