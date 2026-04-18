@@ -1,13 +1,22 @@
 import os
 from openai import OpenAI
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# SAFE CLIENT (no crash if key missing)
+api_key = os.getenv("OPENAI_API_KEY")
+
+if api_key:
+    client = OpenAI(api_key=api_key)
+else:
+    client = None
+
 
 def smart_sku_match(html, sku):
     return str(sku).lower() in html.lower()
 
+
 def smart_seller_match(html, seller):
     return str(seller).lower() in html.lower()
+
 
 def clean_price(price):
     try:
@@ -15,13 +24,18 @@ def clean_price(price):
     except:
         return 0
 
+
 def price_match_for_seller(html, seller, price):
     return str(price) in html
 
-# 🔥 REAL AI
+
+# 🔥 AI MATCH (safe)
 def ai_sku_match(html, sku):
     try:
-        prompt = f"Check if SKU '{sku}' exists in this content. Answer only YES or NO.\n\n{html[:1200]}"
+        if client is None:
+            return str(sku).lower() in html.lower()
+
+        prompt = f"Check if SKU '{sku}' exists in this content. Answer YES or NO.\n\n{html[:1000]}"
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
