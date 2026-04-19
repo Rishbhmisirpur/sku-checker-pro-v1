@@ -5,38 +5,31 @@ from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 
 session = requests.Session()
-session.headers.update({"User-Agent": "Mozilla/5.0"})
+session.headers.update({
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+})
 
-
-def fetch_html(url):
-
-    # requests first
-    for _ in range(2):
-        try:
-            r = session.get(url, timeout=8)
-            if r.status_code == 200:
-                return r.text.lower()
-        except:
-            pass
-        time.sleep(1)
-
-    # selenium fallback
+def fetch_content(url):
+    # Try Requests (Fast)
+    try:
+        r = session.get(url, timeout=10)
+        if r.status_code == 200 and len(r.text) > 1000:
+            return r.text
+    except:
+        pass
+    
+    # Fallback to Selenium (Deep Scrape)
+    driver = None
     try:
         options = Options()
         options.add_argument("--headless=new")
-
-        driver = webdriver.Chrome(
-            service=webdriver.chrome.service.Service(ChromeDriverManager().install()),
-            options=options
-        )
-
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        driver = webdriver.Chrome(options=options)
         driver.get(url)
         time.sleep(5)
-
-        html = driver.page_source.lower()
-        driver.quit()
-
-        return html
-
+        return driver.page_source
     except:
         return ""
+    finally:
+        if driver: driver.quit()
