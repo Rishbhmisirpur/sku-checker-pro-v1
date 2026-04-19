@@ -12,7 +12,7 @@ from db import save_to_history
 st.set_page_config(page_title="SKU AI ANALYZER PRO", layout="wide")
 apply_custom_css()
 
-st.title("🛡️ SKU ULTRA PRO MAX + GEMINI AI")
+st.title("🛡️ SKU ULTRA PRO MAX + ARM AI")
 st.divider()
 
 uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
