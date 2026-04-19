@@ -2,66 +2,120 @@ import streamlit as st
 import pandas as pd
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# Importing from your modular files
 from scraper import fetch_content
 from matcher import smart_sku_match, price_match_for_seller
 from ui import apply_custom_css, render_stats
 from db import save_to_history
 
-st.set_page_config(page_title="PRO SKU ANALYZER", layout="wide")
+# 1. Page Configuration
+st.set_page_config(page_title="PRO SKU ANALYZER ULTRA", layout="wide")
 apply_custom_css()
 
+# 2. Header
 st.title("🛡️ SKU ULTRA PRO MAX")
-st.subheader("Global Price & Seller Verification Dashboard")
+st.markdown("### Strict Seller & Price Verification Dashboard")
+st.divider()
 
-uploaded_file = st.file_uploader("Upload target CSV (Columns: url, sku, seller, price)", type=["csv"])
+# 3. File Upload
+uploaded_file = st.file_uploader("Upload CSV (Required columns: url, sku, seller, price)", type=["csv"])
 
+# 4. Processing Core Logic
 def verify_process(row):
+    """Processes a single row and returns status + boolean flags"""
     try:
-        url, sku, seller = str(row["url"]).strip(), str(row["sku"]), str(row["seller"])
+        url = str(row["url"]).strip()
+        sku = str(row["sku"])
+        seller = str(row["seller"])
+        # Clean price string to float
         target_price = float(re.sub(r'[^0-9.]', '', str(row["price"])))
 
         html = fetch_content(url)
-        if not html: return row.name, "Network Error", False, False, False
+        if not html: 
+            return row.name, "Connection Error", False, False, False
 
+        # SKU Matching
         sku_ok = smart_sku_match(html, sku)
-        if not sku_ok: return row.name, "SKU Wrong", False, False, False
+        if not sku_ok: 
+            return row.name, "SKU Wrong", False, False, False
 
+        # Seller Matching
         seller_ok = seller.lower() in html.lower()
-        if not seller_ok: return row.name, "Seller Not Found", True, False, False
+        if not seller_ok: 
+            return row.name, "Seller Not Found", True, False, False
 
+        # Price Matching for that specific Seller
         price_ok = price_match_for_seller(html, seller, target_price)
-        if not price_ok: return row.name, "Price Wrong", True, True, False
+        if not price_ok: 
+            return row.name, "Price Wrong", True, True, False
 
         return row.name, "Correct", True, True, True
-    except:
-        return row.name, "Script Error", False, False, False
 
+    except Exception as e:
+        return row.name, f"Error: {str(e)}", False, False, False
+
+# 5. Main Execution
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
     
-    if st.button("🔥 START DEEP ANALYSIS"):
+    if st.button("🚀 START CLEAN ANALYSIS"):
         progress_bar = st.progress(0)
         status_text = st.empty()
         table_placeholder = st.empty()
         
-        results = []
         done = 0
-        with ThreadPoolExecutor(max_workers=5) as executor:
+        total = len(df)
+
+        # ThreadPool for speed (max_workers=3 to avoid getting blocked)
+        with ThreadPoolExecutor(max_workers=3) as executor:
             futures = [executor.submit(verify_process, row) for _, row in df.iterrows()]
+            
             for future in as_completed(futures):
-                idx, res, s_ok, sl_ok, p_ok = future.result()
-                df.loc[idx, "result"] = res
+                idx, status, s_ok, sl_ok, p_ok = future.result()
+                
+                # UI/Dashboard columns (Tagda Look with Emojis)
+                df.loc[idx, "Status"] = status
                 df.loc[idx, "sku_match"] = "✅" if s_ok else "❌"
                 df.loc[idx, "seller_match"] = "✅" if sl_ok else "❌"
                 df.loc[idx, "price_match"] = "✅" if p_ok else "❌"
                 
                 done += 1
-                progress_bar.progress(done / len(df))
-                status_text.text(f"Processing item {done} of {len(df)}...")
-                table_placeholder.dataframe(df.head(done), use_container_width=True)
+                progress_bar.progress(done / total)
+                status_text.text(f"Verified {done} of {total} items...")
+                
+                # Show last 5 results live
+                table_placeholder.dataframe(df.iloc[:done], use_container_width=True)
 
+        st.success("✅ Analysis Complete!")
         st.divider()
-        render_stats(df)
-        save_to_history(df)
         
-        st.download_button("📩 Download Verified Report", df.to_csv(index=False), "verified_data.csv", "text/csv")
+        # Display Final Metrics (from ui.py)
+        # Rename column for render_stats if it expects 'result'
+        df_stats = df.rename(columns={"Status": "result"})
+        render_stats(df_stats)
+        
+        # 6. CLEAN DOWNLOAD LOGIC (Fixes the "extra keyword" issue)
+        # We create a clean copy specifically for CSV export
+        clean_df = df.copy()
+        
+        # Convert Emojis back to simple Yes/No for professional CSV
+        status_map = {"✅": "Yes", "❌": "No"}
+        clean_df["sku_match"] = clean_df["sku_match"].map(status_map)
+        clean_df["seller_match"] = clean_df["seller_match"].map(status_map)
+        clean_df["price_match"] = clean_df["price_match"].map(status_map)
+        
+        # Optional: Remove the internal "Status" column if not needed in CSV
+        # clean_df = clean_df.drop(columns=["Status"])
+
+        csv_data = clean_df.to_csv(index=False).encode('utf-8')
+        
+        st.download_button(
+            label="📥 Download Clean CSV (Yes/No)",
+            data=csv_data,
+            file_name="verified_results_clean.csv",
+            mime="text/csv"
+        )
+        
+        # Save to local history (from db.py)
+        save_to_history(clean_df)
