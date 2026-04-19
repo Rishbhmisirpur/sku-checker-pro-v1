@@ -1,17 +1,4 @@
 import os
 
-files = [
-    "main.py",
-    "db.py",
-    "matcher.py",
-    "scraper.py",
-    "ui.py",
-    "utils.py",
-    "requirements.txt"
-]
-
-for f in files:
-    if not os.path.exists(f):
-        open(f, "w").write("")
-
-print("Project setup done 🚀")
+# This script will create the files listed above in your current folder
+# Just run: python setup_project.py
