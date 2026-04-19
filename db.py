@@ -1,28 +1,9 @@
-import sqlite3
+import pandas as pd
 
-conn = sqlite3.connect("results.db", check_same_thread=False)
-cur = conn.cursor()
-
-def init_db():
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS results (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            sku TEXT,
-            seller TEXT,
-            price TEXT,
-            result TEXT
-        )
-    """)
-    conn.commit()
-
-def save_result(res):
-    cur.execute("""
-        INSERT INTO results (sku, seller, price, result)
-        VALUES (?, ?, ?, ?)
-    """, (
-        res["sku_val"],
-        res["seller_val"],
-        res["price_val"],
-        res["result"]
-    ))
-    conn.commit()
+def save_to_history(df, filename="history.csv"):
+    try:
+        existing_df = pd.read_csv(filename)
+        updated_df = pd.concat([existing_df, df], ignore_index=True)
+        updated_df.to_csv(filename, index=False)
+    except FileNotFoundError:
+        df.to_csv(filename, index=False)
