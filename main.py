@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import re
+import io
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from scraper import fetch_content
 from matcher import smart_sku_match, price_match_for_seller, ai_deep_verify, smart_seller_match
@@ -12,7 +13,7 @@ apply_custom_css()
 
 st.title("🛡️ SKU ULTRA PRO MAX + ARM AI")
 
-# File upload with encoding fix to handle special characters correctly
+# File upload
 uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
 
 def verify_process(row):
@@ -32,7 +33,7 @@ def verify_process(row):
         # 1. SKU Check
         sku_ok = smart_sku_match(html, sku)
 
-        # 2. Seller Check (Using new smart match)
+        # 2. Seller Check
         seller_ok = smart_seller_match(html, seller)
 
         # 3. Price Check
@@ -40,7 +41,7 @@ def verify_process(row):
         price_ok = price_logic_ok
         
         if not price_logic_ok or not seller_ok:
-            # Double check with AI if logic fails
+            # Double check with AI
             price_ok = ai_deep_verify(html, sku, seller, target_price)
             if price_ok: 
                 seller_ok = True
@@ -60,8 +61,14 @@ def verify_process(row):
         return idx, f"Error: {str(e)}", False, False, False
 
 if uploaded_file:
-    # Read with utf-8-sig to prevent "âœ" issues
-    df = pd.read_csv(uploaded_file, encoding='utf-8-sig', errors='ignore')
+    # --- ERROR FIX: Handling file reading safely ---
+    try:
+        # Streamlit cloud ke liye safe reading logic
+        file_bytes = uploaded_file.getvalue()
+        df = pd.read_csv(io.BytesIO(file_bytes), encoding='utf-8-sig', errors='ignore')
+    except Exception as e:
+        st.error(f"File reading error: {e}")
+        st.stop()
     
     if st.button("🔥 START AI ANALYSIS"):
         progress = st.progress(0)
@@ -69,6 +76,7 @@ if uploaded_file:
         done = 0
         df["Status"] = "Pending"
         
+        # Max workers 3 for stability
         with ThreadPoolExecutor(max_workers=3) as executor:
             futures = [executor.submit(verify_process, row) for _, row in df.iterrows()]
             for future in as_completed(futures):
@@ -86,14 +94,11 @@ if uploaded_file:
         
         # --- CLEAN CSV DOWNLOAD ---
         clean_df = df.copy()
-        
-        # Convert emojis to Yes/No for better Excel compatibility
         mapping = {"✅": "Yes", "❌": "No"}
         for col in ["sku_match", "seller_match", "price_match"]:
             if col in clean_df.columns:
                 clean_df[col] = clean_df[col].replace(mapping)
 
-        # Using utf-8-sig encoding for perfect Excel export
         csv_output = clean_df.to_csv(index=False, encoding='utf-8-sig')
 
         st.download_button(
