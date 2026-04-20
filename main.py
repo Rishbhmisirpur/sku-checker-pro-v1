@@ -13,7 +13,6 @@ apply_custom_css()
 
 st.title("🛡️ SKU ULTRA PRO MAX + ARM AI")
 
-# File upload
 uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
 
 def verify_process(row):
@@ -30,18 +29,12 @@ def verify_process(row):
         if not html or len(html) < 500:
             return idx, "Network Error/Blocked", False, False, False
 
-        # 1. SKU Check
         sku_ok = smart_sku_match(html, sku)
-
-        # 2. Seller Check
         seller_ok = smart_seller_match(html, seller)
-
-        # 3. Price Check
         price_logic_ok = price_match_for_seller(html, seller, target_price)
         price_ok = price_logic_ok
         
         if not price_logic_ok or not seller_ok:
-            # Double check with AI
             price_ok = ai_deep_verify(html, sku, seller, target_price)
             if price_ok: 
                 seller_ok = True
@@ -61,14 +54,17 @@ def verify_process(row):
         return idx, f"Error: {str(e)}", False, False, False
 
 if uploaded_file:
-    # --- ERROR FIX: Handling file reading safely ---
     try:
-        # Streamlit cloud ke liye safe reading logic
         file_bytes = uploaded_file.getvalue()
-        df = pd.read_csv(io.BytesIO(file_bytes), encoding='utf-8-sig', errors='ignore')
-    except Exception as e:
-        st.error(f"File reading error: {e}")
-        st.stop()
+        # Removed 'errors' argument to fix the TypeError
+        df = pd.read_csv(io.BytesIO(file_bytes), encoding='utf-8-sig')
+    except Exception:
+        try:
+            uploaded_file.seek(0)
+            df = pd.read_csv(uploaded_file, encoding='latin-1')
+        except Exception as e:
+            st.error(f"Could not read CSV: {e}")
+            st.stop()
     
     if st.button("🔥 START AI ANALYSIS"):
         progress = st.progress(0)
@@ -76,7 +72,6 @@ if uploaded_file:
         done = 0
         df["Status"] = "Pending"
         
-        # Max workers 3 for stability
         with ThreadPoolExecutor(max_workers=3) as executor:
             futures = [executor.submit(verify_process, row) for _, row in df.iterrows()]
             for future in as_completed(futures):
@@ -92,7 +87,6 @@ if uploaded_file:
         st.success("Analysis Finished!")
         render_stats(df.rename(columns={"Status": "result"}))
         
-        # --- CLEAN CSV DOWNLOAD ---
         clean_df = df.copy()
         mapping = {"✅": "Yes", "❌": "No"}
         for col in ["sku_match", "seller_match", "price_match"]:
