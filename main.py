@@ -12,6 +12,7 @@ apply_custom_css()
 
 st.title("🛡️ SKU ULTRA PRO MAX + ARM AI")
 
+# File upload with encoding fix to handle special characters correctly
 uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
 
 def verify_process(row):
@@ -26,7 +27,6 @@ def verify_process(row):
         html = fetch_content(url)
         
         if not html or len(html) < 500:
-            # Re-try with AI directly if HTML is thin or network failed
             return idx, "Network Error/Blocked", False, False, False
 
         # 1. SKU Check
@@ -42,7 +42,7 @@ def verify_process(row):
         if not price_logic_ok or not seller_ok:
             # Double check with AI if logic fails
             price_ok = ai_deep_verify(html, sku, seller, target_price)
-            if price_ok: # If AI says YES, we trust it for both seller and price
+            if price_ok: 
                 seller_ok = True
 
         if sku_ok and seller_ok and price_ok:
@@ -60,14 +60,15 @@ def verify_process(row):
         return idx, f"Error: {str(e)}", False, False, False
 
 if uploaded_file:
-    df = pd.read_csv(uploaded_file)
+    # Read with utf-8-sig to prevent "âœ" issues
+    df = pd.read_csv(uploaded_file, encoding='utf-8-sig', errors='ignore')
+    
     if st.button("🔥 START AI ANALYSIS"):
         progress = st.progress(0)
         table_area = st.empty()
         done = 0
         df["Status"] = "Pending"
         
-        # Reduced workers to 3 to prevent rapid blocking/network errors
         with ThreadPoolExecutor(max_workers=3) as executor:
             futures = [executor.submit(verify_process, row) for _, row in df.iterrows()]
             for future in as_completed(futures):
@@ -82,4 +83,22 @@ if uploaded_file:
 
         st.success("Analysis Finished!")
         render_stats(df.rename(columns={"Status": "result"}))
-        st.download_button("📥 Download Results", df.to_csv(index=False), "results.csv", "text/csv")
+        
+        # --- CLEAN CSV DOWNLOAD ---
+        clean_df = df.copy()
+        
+        # Convert emojis to Yes/No for better Excel compatibility
+        mapping = {"✅": "Yes", "❌": "No"}
+        for col in ["sku_match", "seller_match", "price_match"]:
+            if col in clean_df.columns:
+                clean_df[col] = clean_df[col].replace(mapping)
+
+        # Using utf-8-sig encoding for perfect Excel export
+        csv_output = clean_df.to_csv(index=False, encoding='utf-8-sig')
+
+        st.download_button(
+            label="📥 Download Clean CSV",
+            data=csv_output,
+            file_name="ai_analysis_results.csv",
+            mime="text/csv"
+        )
