@@ -18,44 +18,58 @@ st.divider()
 uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
 
 def verify_process(row):
+    """
+    Processes each row to verify SKU, Seller, and Price.
+    Logic is modified to ensure all checks run even if one fails.
+    """
+    idx = row.name
+    status_msg = "Processed"
+    sku_ok = False
+    seller_ok = False
+    price_ok = False
+
     try:
         url = str(row["url"]).strip()
         sku = str(row["sku"])
         seller = str(row["seller"])
-        target_price = float(re.sub(r'[^0-9.]', '', str(row["price"])))
+        # Clean price string to float
+        price_str = re.sub(r'[^0-9.]', '', str(row["price"]))
+        target_price = float(price_str) if price_str else 0.0
 
         html = fetch_content(url)
         if not html: 
-            return row.name, "Network Error", False, False, False
+            return idx, "Network Error", False, False, False
 
-        # 1. SKU Check (Using Logic)
+        # 1. SKU Check
         sku_ok = smart_sku_match(html, sku)
-        if not sku_ok:
-            return row.name, "SKU Wrong", False, False, False
 
-        # 2. Seller Check (Using Logic)
+        # 2. Seller Check (Runs regardless of SKU result)
         seller_ok = seller.lower() in html.lower()
-        if not seller_ok:
-            return row.name, "Wrong Seller", True, False, False
 
         # 3. Price Check (Logic + AI double check)
-        price_ok = price_match_for_seller(html, seller, target_price)
+        price_logic_ok = price_match_for_seller(html, seller, target_price)
         
-        # --- AI INTERVENTION ---
-        # Agar logic fail hota hai, toh Gemini AI ek baar check karega
-        if not price_ok:
-            # AI ko snippet bhej rahe hain verify karne ke liye
-            ai_confirmed = ai_deep_verify(html, sku, seller, target_price)
-            if ai_confirmed:
-                price_ok = True  # AI ne override kar diya agar use price mil gayi
-        
-        if not price_ok:
-            return row.name, "Price Wrong", True, True, False
+        if not price_logic_ok:
+            # Trigger Gemini AI if standard logic fails
+            price_ok = ai_deep_verify(html, sku, seller, target_price)
+        else:
+            price_ok = True
 
-        return row.name, "Correct", True, True, True
+        # Determine Final Status Message
+        if sku_ok and seller_ok and price_ok:
+            status_msg = "Correct"
+        else:
+            # Concatenate errors for better visibility
+            errors = []
+            if not sku_ok: errors.append("SKU Wrong")
+            if not seller_ok: errors.append("Seller Wrong")
+            if not price_ok: errors.append("Price Wrong")
+            status_msg = " | ".join(errors)
+
+        return idx, status_msg, sku_ok, seller_ok, price_ok
 
     except Exception as e:
-        return row.name, "System Error", False, False, False
+        return idx, f"System Error: {str(e)}", False, False, False
 
 if uploaded_file:
     df = pd.read_csv(uploaded_file)
@@ -65,15 +79,18 @@ if uploaded_file:
         table_area = st.empty()
         
         done = 0
-        with ThreadPoolExecutor(max_workers=3) as executor:
+        # Initialize columns
+        df["Status"] = "Pending"
+        
+        with ThreadPoolExecutor(max_workers=5) as executor:
             futures = [executor.submit(verify_process, row) for _, row in df.iterrows()]
             for future in as_completed(futures):
                 idx, status, s_ok, sl_ok, p_ok = future.result()
                 
-                df.loc[idx, "Status"] = status
-                df.loc[idx, "sku_match"] = "✅" if s_ok else "❌"
-                df.loc[idx, "seller_match"] = "✅" if sl_ok else "❌"
-                df.loc[idx, "price_match"] = "✅" if p_ok else "❌"
+                df.at[idx, "Status"] = status
+                df.at[idx, "sku_match"] = "✅" if s_ok else "❌"
+                df.at[idx, "seller_match"] = "✅" if sl_ok else "❌"
+                df.at[idx, "price_match"] = "✅" if p_ok else "❌"
                 
                 done += 1
                 progress.progress(done / len(df))
@@ -88,4 +105,9 @@ if uploaded_file:
         for col in ["sku_match", "seller_match", "price_match"]:
             clean_df[col] = clean_df[col].map(mapping)
 
-        st.download_button("📥 Download Clean CSV", clean_df.to_csv(index=False), "ai_results.csv", "text/csv")
+        st.download_button(
+            label="📥 Download Clean CSV",
+            data=clean_df.to_csv(index=False),
+            file_name="ai_results.csv",
+            mime="text/csv"
+        )
