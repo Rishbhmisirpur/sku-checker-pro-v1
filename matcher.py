@@ -1,59 +1,64 @@
 import re
 import google.generativeai as genai
 
-API_KEY = "AIzaSyC47U5A8CEe9UOgtOEytRrpc5SPDgLFbFg" 
+API_KEY = "YOUR_API_KEY_HERE"
 genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
 
+
 def normalize(text):
-    """Removes special characters for clean matching"""
+    return re.sub(r'[^a-zA-Z0-9]', '', str(text)).lower()
+
+
+def normalize_sku(text):
     return re.sub(r'[^a-zA-Z0-9]', '', str(text)).lower()
 
 
 def smart_seller_match(html_text, seller_name):
-    """Matches seller names even with different separators like Walmart_-_Buildcom"""
     norm_html = normalize(html_text)
     norm_seller = normalize(seller_name)
     return norm_seller in norm_html
 
 
-# 🔥 FIXED: STRICT SKU MATCH (NO PARTIAL MATCH)
 def smart_sku_match(html, sku):
-    # remove scripts/styles
-    html_clean = re.sub(r'<script.*?>.*?</script>|<style.*?>.*?</style>', '', html, flags=re.DOTALL)
-    
-    # remove HTML tags
+    html_clean = re.sub(
+        r'<script.*?>.*?</script>|<style.*?>.*?</style>',
+        '',
+        html,
+        flags=re.DOTALL | re.IGNORECASE
+    )
+
     text = re.sub(r'<[^>]+>', ' ', html_clean)
-    
-    # split into tokens (keeping hyphen important for SKU)
-    tokens = re.split(r'[^a-zA-Z0-9\-]+', text)
-    
-    # normalize sku (lower only, DON'T remove hyphen)
-    sku_clean = str(sku).strip().lower()
-    
-    # normalize tokens
-    tokens = [t.strip().lower() for t in tokens if t.strip()]
-    
-    # exact match only
-    for t in tokens:
-        if t == sku_clean:
-            return True
-    
+    text_lower = text.lower()
+
+    sku_raw = str(sku).strip().lower()
+    sku_norm = normalize_sku(sku)
+
+    # Exact same SKU format match
+    if re.search(rf'(?<![a-zA-Z0-9]){re.escape(sku_raw)}(?![a-zA-Z0-9])', text_lower):
+        return True
+
+    # Same complete SKU with different separator:
+    # 7701-BN / 7701 BN / 7701_BN / 7701BN
+    text_norm = normalize_sku(text)
+    if sku_norm and sku_norm in text_norm:
+        return True
+
     return False
 
 
 def price_match_for_seller(html, seller, target_price):
     html = html.lower()
-    
+
     norm_seller_search = normalize(seller)
-    
+
     # seller must exist
     if norm_seller_search not in normalize(html):
         return False
 
-    # find all numbers (possible prices)
+    # find all numbers possible prices
     found_prices = re.findall(r'\d+\.?\d*', html)
-    
+
     for p in found_prices:
         try:
             if abs(float(p) - float(target_price)) < 0.01:
@@ -73,15 +78,16 @@ def ai_deep_verify(html, sku, seller, price):
         Product SKU: {sku}
         Seller Name: {seller}
         Required Price: {price}
-        
+
         Task: Check if {seller} is selling {sku} for {price}.
-        Note: Seller names might have symbols like '-' or '_'. 
-        
+        Note: Seller names might have symbols like '-' or '_'.
+
         IMPORTANT:
-        - SKU must be EXACT match (no extra suffix like -162 allowed)
-        
+        - SKU must be EXACT match.
+        - Do not allow wrong extra suffix.
+
         Answer ONLY: YES or NO.
-        
+
         Text:
         {clean_text}
         """
